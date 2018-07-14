@@ -1,0 +1,6 @@
+[package]
+name = "vtable"
+version = "0.1.0"
+authors = ["Alexander Kiselev <tyrant91101@gmail.com>"]
+
+[dependencies]
