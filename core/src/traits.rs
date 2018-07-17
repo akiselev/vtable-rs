@@ -1,6 +1,6 @@
 use std::ops::{Index, Deref, DerefMut};
 
-pub trait Symbol: Copy + 'static {
+pub trait Symbol: Copy + Clone {
     type Type;
 }
 
@@ -23,24 +23,22 @@ where
 //     fn get_ref(&self) -> Self::Output;
 // }
 
-pub trait Virtual<'this, 'virt, S>
+pub trait GetVirtual<'this, S>
 where
     S: Symbol,
     Self: 'this,
-    'this: 'virt
 {
-    type Output: VirtualRef<'virt, S>;
+    type Output: VirtualRef<'this, S>;
 
     fn get_ref(&'this self) -> Self::Output;
 }
 
-pub trait VirtualMut<'this, 'virt, S>
+pub trait GetVirtualMut<'this, S>
 where
     S: Symbol,
     Self: 'this,
-    'this: 'virt
 {
-    type Output: VirtualRefMut<'virt, S>;
+    type Output: VirtualRefMut<'this, S>;
 
     fn get_mut_ref(&'this mut self) -> Self::Output;
 }

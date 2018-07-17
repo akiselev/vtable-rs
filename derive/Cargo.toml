@@ -1,6 +1,16 @@
+cargo-features = ["edition"]
+
 [package]
 name = "vtable-derive"
 version = "0.1.0"
 authors = ["Alexander Kiselev <tyrant91101@gmail.com>"]
+edition = '2018'
+
+[lib]
+name = "vtable_derive"
+proc-macro = true
 
 [dependencies]
+syn = { version = "0.14", features = ['extra-traits', 'parsing', 'full'] }
+quote = "0.6"
+proc-macro2 = { version = "0.4", features = ["nightly"] }

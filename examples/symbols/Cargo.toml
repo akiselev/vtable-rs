@@ -1,0 +1,13 @@
+cargo-features=["edition"]
+
+[package]
+name = "symbols"
+version = "0.1.0"
+authors = ["Alexander Kiselev <tyrant91101@gmail.com>"]
+edition="2018"
+
+[dependencies]
+vtable-derive = { path = "../../derive" }
+
+[dependencies.vtable]
+path = "../../core"

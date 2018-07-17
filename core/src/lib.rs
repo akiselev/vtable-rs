@@ -33,26 +33,24 @@ impl<'virt, S: Symbol> Deref for TestObjRef<'virt, S> {
 
 impl<'virt, S: Symbol> VirtualRef<'virt, S> for TestObjRef<'virt, S> {}
 
-impl<'this, 'virt> Virtual<'this, 'virt, Size> for TestObj
+impl<'this> GetVirtual<'this, Size> for TestObj
 where
     Self: 'this,
-    'this: 'virt
 {
-    type Output = TestObjRef<'virt, Size>;
+    type Output = TestObjRef<'this, Size>;
 
-    fn get_ref(&'this self) -> TestObjRef<'virt, Size> {
+    fn get_ref(&'this self) -> TestObjRef<'this, Size> {
         TestObjRef { ptr: &self.size }
     }
 }
 
-impl<'this, 'virt> Virtual<'this, 'virt, Position> for TestObj
+impl<'this> GetVirtual<'this, Position> for TestObj
 where
     Self: 'this,
-    'this: 'virt
 {
-    type Output = TestObjRef<'virt, Position>;
+    type Output = TestObjRef<'this, Position>;
 
-    fn get_ref(&'this self) -> TestObjRef<'virt, Position> {
+    fn get_ref(&'this self) -> TestObjRef<'this, Position> {
         TestObjRef { ptr: &self.position }
     }
 }
