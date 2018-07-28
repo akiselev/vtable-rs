@@ -2,7 +2,7 @@
 // macros
 use syn::{named, syn, keyword, punct, do_parse, Token, call};
 // Parser combinators
-use syn::{Visibility, Ident, Generics, GenericParam, Type};
+use syn::{Visibility, Ident, Generics, GenericParam, Type, File};
 use syn::punctuated::Punctuated;
 use syn::token::{Semi, Comma};
 use syn::synom::Synom;
@@ -11,7 +11,11 @@ use proc_macro::{TokenStream as LegacyTokenStream};
 use proc_macro2::TokenStream;
 use quote::*;
 
+mod interface;
+
 mod utils;
+
+use self::interface::*;
 
 struct SymbolType {
     name: Ident,
@@ -152,6 +156,19 @@ pub fn symbol(input: LegacyTokenStream) -> LegacyTokenStream {
         #struct_decl
 
         #symbol_impl
+    };
+
+    // Hand the output tokens back to the compiler
+    expanded.into()
+}
+
+#[proc_macro]
+pub fn vtable(input: LegacyTokenStream) -> LegacyTokenStream {
+    // Parse the input tokens into a syntax tree
+    let code: File = syn::parse(input).unwrap();
+
+    let expanded = quote! {
+        #name #blockx
     };
 
     // Hand the output tokens back to the compiler

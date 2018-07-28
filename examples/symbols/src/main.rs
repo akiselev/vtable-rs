@@ -1,6 +1,6 @@
 #![feature(rust_2018_preview, proc_macro)]
 
-use vtable_derive::symbol;
+use vtable_derive::{symbol, interface};
 
 symbol! {
     pub width = f32 as Width;
@@ -8,6 +8,13 @@ symbol! {
 
 symbol! {
     pub height = f32 as Height<T: Copy>;
+}
+
+interface! IRect {
+    size: Size;
+    position: Position;
+
+    
 }
 
 

@@ -23,22 +23,24 @@ where
 //     fn get_ref(&self) -> Self::Output;
 // }
 
-pub trait GetVirtual<'this, S>
+pub trait GetVirtual<'this, 'virt, S>
 where
     S: Symbol,
     Self: 'this,
+    'this: 'virt
 {
-    type Output: VirtualRef<'this, S>;
+    type Output: VirtualRef<'virt, S>;
 
     fn get_ref(&'this self) -> Self::Output;
 }
 
-pub trait GetVirtualMut<'this, S>
+pub trait GetVirtualMut<'this, 'virt, S>
 where
     S: Symbol,
     Self: 'this,
+    'this: 'virt
 {
-    type Output: VirtualRefMut<'this, S>;
+    type Output: VirtualRefMut<'virt, S>;
 
     fn get_mut_ref(&'this mut self) -> Self::Output;
 }
