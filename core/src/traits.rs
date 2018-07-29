@@ -1,7 +1,46 @@
 use std::ops::{Index, Deref, DerefMut};
 
+use std::rc::Rc;
+use std::cell::Cell;
+
+use frunk::hlist::{HCons, HNil};
+use frunk_core::indices::{Here, There};
+
 pub trait Symbol: Copy + Clone {
     type Type;
+
+    fn as_path(&self) -> HCons<Self, HNil> {
+        HCons {
+            head: self.clone(),
+            tail: HNil
+        }
+    }
+}
+
+pub trait VPath: Symbol {
+    type Parent;
+}
+
+pub trait Parent {
+    type Path: VPath;
+    type Symbol: Symbol;
+}
+
+impl<SYM: Symbol, PATH: VPath> VPath for HCons<SYM, PATH> {
+    type Parent = PATH;
+}
+
+impl<SYM: Symbol, PATH: Copy + Clone> Symbol for HCons<SYM, PATH> {
+    type Type = SYM::Type;
+}
+
+impl<SYM: Symbol> VPath for HCons<SYM, HNil> {
+    type Parent = HNil;
+}
+
+impl<SYM: Symbol, PSYM: Symbol, PATH: VPath> Parent for HCons<SYM, HCons<PSYM, PATH>> {
+    type Path = PATH;
+    type Symbol = PSYM;
 }
 
 pub trait VirtualRef<'virt, S> : Deref<Target=S::Type>

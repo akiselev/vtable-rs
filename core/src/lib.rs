@@ -1,98 +1,97 @@
+#![feature(async_await, await_macro, pin, arbitrary_self_types, futures_api, proc_macro, proc_macro_span, proc_macro_raw_ident)]
+
 use std::ops::{Index, Deref, DerefMut};
 use std::borrow::Borrow;
+use std::mem::PinMut;
+use vtable_derive::symbol;
+
+use frunk::hlist::{HCons, HNil};
+use frunk_core::indices::{Here, There};
 
 mod traits;
-pub use traits::*;
+pub use crate::traits::*;
 
-// struct SizeObj {
-//     width: f32,
-//     height: f32,
-// }
-
-// struct PositionObj {
-//     x: f32,
-//     y: f32
-// }
-
-// struct TestObj {
-//     size: SizeObj,
-//     position: PositionObj
-// }
-
-// struct TestObjRef<'virt, S: Symbol> {
-//     ptr: &'virt S::Type,
-// }
-
-// impl<'virt, S: Symbol> Deref for TestObjRef<'virt, S> {
-//     type Target = S::Type;
-
-//     fn deref(&self) -> &S::Type {
-//         self.ptr
-//     }
-// }
-
-// impl<'virt, S: Symbol> VirtualRef<'virt, S> for TestObjRef<'virt, S> {}
-
-// impl<'this, 'virt> GetVirtual<'this, 'virt, Size> for TestObj
-// where
-//     Self: 'this,
-//     'this: 'virt
-// {
-//     type Output = TestObjRef<'virt, Size>;
-
-//     fn get_ref(&'this self) -> TestObjRef<'virt, Size> {
-//         TestObjRef { ptr: &self.size }
-//     }
-// }
-
-// impl<'this, 'virt> GetVirtual<'this, 'virt, Position> for TestObj
-// where
-//     Self: 'this,
-//     'this: 'virt
-// {
-//     type Output = TestObjRef<'virt, Position>;
-
-//     fn get_ref(&'this self) -> TestObjRef<'virt, Position> {
-//         TestObjRef { ptr: &self.position }
-//     }
-// }
-
-macro_rules! impl_virt {
-    () => {
-
-    };
+#[derive(Copy, Clone, Debug)]
+struct PButton<S: Symbol> {
+    symbol: S,
 }
 
-macro_rules! Ty {
-    ($t:ty) => {
-        <$t as Symbol>::Type
-    };
+impl<SYM: Symbol> Symbol for PButton<SYM> {
+    type Type = SYM::Type;
 }
 
-// impl<S: Symbol, T: This<Width>> Index<T> for Width {
-//     type Output = usize;
+symbol!(pub width = f32 as Width;);
+symbol!(pub height = f32 as Height;);
+symbol!(pub top = f32 as Top;);
+symbol!(pub left = f32 as Left;);
+symbol!(pub text = f32 as Text;);
 
-//     fn index(&self, nucleotide: Nucleotide) -> &usize {
-//         match nucleotide {
-//             Nucleotide::A => &self.a,
-//             Nucleotide::C => &self.c,
-//             Nucleotide::G => &self.g,
-//             Nucleotide::T => &self.t,
-//         }
+trait IButton {
+    /** Dynamic Dispatch super trait for returning a button object */
+
+    fn render(&self);
+}
+
+trait VButton {
+    /**  */
+    type Width: VPath + Symbol<Type=f32>;
+    type Height: VPath + Symbol<Type=f32>;
+    type Top: VPath + Symbol<Type=f32>;
+    type Left: VPath + Symbol<Type=f32>;
+    type Text: VPath + Symbol<Type=String>;
+}
+
+struct Prop<'this, T: 'this> {
+    ptr: PinMut<'this, T>
+}
+
+struct PropPtr<'ptr, 'this: 'ptr, P: VPath, S: Symbol> where S::Type: 'this {
+    path: P,
+    symbol: S,
+    ptr: &'ptr PinMut<'this, S::Type>
+}
+
+struct Button<'this> {
+    width: Prop<'this, f32>,
+    height: Prop<'this, f32>,
+    top: Prop<'this, f32>,
+    left: Prop<'this, f32>,
+    text: Prop<'this, String>
+}
+
+struct ObjectBuilder<SYM: Symbol, DATA> {
+    symbol: std::marker::PhantomData<SYM>,
+    data: DATA, 
+}
+
+impl<SYM: Symbol, DATA> ObjectBuilder<SYM, DATA> {
+    fn add_child<CHILD: Symbol, CDATA>(self, data: CDATA) where DATA: Append<CHILD, CDATA> {
+
+    }
+}
+
+trait Append<SYM: Symbol, DATA> {
+    type Output;
+
+    fn append(self, data: DATA) -> Self::Output;
+}
+
+impl<SYM: Symbol, DATA> Append<SYM, DATA> for HNil {
+    type Output = DATA;
+
+    fn append(self, data: DATA) -> DATA {
+        data
+    }
+}
+
+// impl Object {
+//     fn new<PATH: VPath, SUPER>(this: Obj<PATH, SUPER>) -> impl HList {
+
 //     }
 // }
 
-// #[derive(Copy, Clone, PartialEq, Eq, Hash)]
-// struct Size;
-// impl Symbol for Size { type Type = SizeObj; }
 
-// #[derive(Copy, Clone, PartialEq, Eq, Hash)]
-// struct Position;
-// impl Symbol for Position { type Type = PositionObj; }
-
-// #[derive(Copy, Clone, PartialEq, Eq, Hash)]
-// struct Obj;
-// impl Symbol for Obj { type Type = TestObj; }
+// impl<PATH: VPath, SYM: Symbol, HEAD, TAIL> Append<SYM, DATA> for HCons<HEAD, TAIL>
 
 #[cfg(test)]
 mod tests {

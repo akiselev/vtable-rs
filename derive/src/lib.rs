@@ -1,4 +1,4 @@
-#![feature(proc_macro)]
+#![feature(proc_macro, proc_macro_span, proc_macro_raw_ident)]
 // macros
 use syn::{named, syn, keyword, punct, do_parse, Token, call};
 // Parser combinators
@@ -146,7 +146,7 @@ pub fn symbol(input: LegacyTokenStream) -> LegacyTokenStream {
         let (impl_generics, ty_generics, where_clause) = symbol_type.generics.split_for_impl();
 
         quote! {
-            impl#impl_generics ::vtable::Symbol for #symbol_name #ty_generics #where_clause {
+            impl#impl_generics Symbol for #symbol_name #ty_generics #where_clause {
                 type Type = #data_type;
             }
         }
@@ -162,18 +162,18 @@ pub fn symbol(input: LegacyTokenStream) -> LegacyTokenStream {
     expanded.into()
 }
 
-#[proc_macro]
-pub fn vtable(input: LegacyTokenStream) -> LegacyTokenStream {
-    // Parse the input tokens into a syntax tree
-    let code: File = syn::parse(input).unwrap();
+// #[proc_macro]
+// pub fn vtable(input: LegacyTokenStream) -> LegacyTokenStream {
+//     // Parse the input tokens into a syntax tree
+//     let code: File = syn::parse(input).unwrap();
 
-    let expanded = quote! {
-        #name #blockx
-    };
+//     let expanded = quote! {
+//         #name #blockx
+//     };
 
-    // Hand the output tokens back to the compiler
-    expanded.into()
-}
+//     // Hand the output tokens back to the compiler
+//     expanded.into()
+// }
 
 #[cfg(test)]
 mod tests {

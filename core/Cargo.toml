@@ -1,6 +1,18 @@
+cargo-features = ["edition"]
+
 [package]
 name = "vtable"
 version = "0.1.0"
 authors = ["Alexander Kiselev <tyrant91101@gmail.com>"]
+edition = '2018'
+
+[lib]
+name = "vtable"
 
 [dependencies]
+frunk = "0.2.0"
+frunk_core = "0.2.0"
+
+[dependencies.vtable-derive]
+path = "../derive"
+version = "0.1"
