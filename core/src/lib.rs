@@ -1,4 +1,4 @@
-#![feature(async_await, await_macro, pin, arbitrary_self_types, futures_api, proc_macro, proc_macro_span, proc_macro_raw_ident, never_type, specialization, unboxed_closures)]
+#![feature(async_await, await_macro, pin, fn_traits, arbitrary_self_types, futures_api, proc_macro, proc_macro_span, proc_macro_raw_ident, never_type, specialization, unboxed_closures)]
 
 use std::ops::{Index, Deref, DerefMut};
 use std::borrow::Borrow;
@@ -12,14 +12,13 @@ use frunk_core::*;
 use frunk_core::hlist::*;
 use frunk_core::indices::*;
 use failure::{Error, Fail};
+use std::mem::size_of;
 
 mod traits;
 pub use crate::traits::*;
 
-struct Class<P, T> {
-    path: Path<P>,
-    data: T
-}
+mod folds;
+pub use crate::folds::*;
 
 trait At<Name> {
     type AtRes;
@@ -27,184 +26,42 @@ trait At<Name> {
     fn at(self) -> Self::AtRes;
 }
 
-trait Push<T> {
-    type PushRes;
-
-    fn push(self, other: T) -> Self::PushRes;
-}
-
-impl<T> Push<T> for HNil {
-    type PushRes = HCons<T, HNil>;
-
-    fn push(self, other: T) -> HCons<T, HNil> {
-        HCons {
-            head: other,
-            tail: HNil
-        }
-    }
-}
-
-impl<T, HEAD, TAIL> Push<T> for HCons<HEAD, TAIL> {
-    type PushRes = HCons<T, HCons<HEAD, TAIL>>;
-
-    fn push(self, other: T) -> HCons<T, HCons<HEAD, TAIL>> {
-        HCons {
-            head: other,
-            tail: self
-        }
-    }
-}
-
-impl<T> At<HNil> for Class<HNil, T> {
-    type AtRes = Class<HNil, T>;
-
-    fn at(self) -> Class<HNil, T> {
-        Class {
-            path: Path::new(),
-            data: self.data
-        }
-    }
-}
-
-default impl<Name, P, T> At<Name> for Class<P, T> {
-    type AtRes = Class<HCons<Name, P>, T>;
-
-    fn at(self) -> Class<HCons<Name, P>, T> {
-        Class {
-            path: Path::new(),
-            data: self.data
-        }
-    }
-}
-
-trait AddClass<Name, F>: At<Name> {
-    type Output;
-
-    fn init(self, func: F) -> Self::Output;
-}
-
 trait Entry {
-    type Path;
+    type Path: Clone;
     type Data;
 
-    fn get_data(self) -> Self::Data;
+    fn get_path(&self) -> Self::Path;
+    fn get_data(self) -> (Self::Path, Self::Data);
     fn borrow_data(&self) -> &Self::Data;
 }
 
-impl<N, T> Entry for (N, T) {
-    type Path = N;
-    type Data = T;
-
-    fn get_data(self) -> Self::Data {
-        self.1
-    }
-
-    fn borrow_data(&self) -> &Self::Data {
-        &self.1
-    }
+pub trait InitSize {
+    const SIZE: usize;
 }
 
-impl<N, T> Entry for Class<N, T> {
-    type Path = N;
-    type Data = T;
-
-    fn get_data(self) -> Self::Data {
-        self.data
-    }
-
-    fn borrow_data(&self) -> &Self::Data {
-        &self.data
-    }
+impl InitSize for HNil {
+    const SIZE: usize = 0;
 }
 
-impl<'this, P, T: 'this> ToRef<'this> for Class<P, T>
-where
-    <Class<P, T> as Entry>::Data: ToRef<'this>,
-    <T as frunk_core::traits::ToRef<'this>>::Output: 'this,
-    T: frunk_core::traits::ToRef<'this>,
+impl<P, T, F> InitSize for Const<P, T, F>
+where T: Sized, F: Fn() -> T
 {
-    type Output = <<Self as Entry>::Data as ToRef<'this>>::Output;
-
-    fn to_ref(&'this self) -> <T as ToRef<'this>>::Output {
-        self.borrow_data().to_ref()
-    }
+    const SIZE: usize = size_of::<T>();
 }
 
-
-impl<P, T, Name, F, OLIST: HList, X, Y, FINAL> AddClass<Name, F> for Class<P, T> 
-where
-    Self: At<Name>,
-    Self::AtRes: Entry<Data=T>,
-    X: Entry,
-    F: Fn(Y) -> OLIST,
-    T: Push<(Path<HCons<Name, P>>, F)>,
-    <X as Entry>::Data: Fn(Y) -> OLIST,
-    <Class<P, T> as At<Name>>::AtRes: Push<(Path<HCons<Name, P>>, F)>,
-    <<Class<P, T> as At<Name>>::AtRes as Push<(Path<HCons<Name, P>>, F)>>::PushRes: for<'this> ToRef<'this, Output=HCons<X, Y>> + Push<OLIST>,
-    <<<Class<P, T> as At<Name>>::AtRes as Push<(Path<HCons<Name, P>>, F)>>::PushRes as Push<OLIST>>::PushRes: Entry<Data=FINAL>
-{
-    type Output = Class<P, FINAL>;
-
-    fn init(self, func: F) -> Self::Output {
-        let builder = self.at();
-        let builder = builder.push((Path::new(), func));
-        let output = {
-            let refs = builder.to_ref();
-            let func = refs.head.borrow_data();
-            func(refs.tail)
-        };
-        let final_data = builder.push(output);
-        Class {
-            path: Path::new(),
-            data: final_data.get_data()
-        }
-    }
+impl<H: InitSize, T: InitSize> InitSize for HCons<H, T> {
+    const SIZE: usize = H::SIZE + T::SIZE;
 }
 
-impl<P: HList, T> Class<P, T> {
-    fn at<Name>(self) -> Class<HCons<Name, P>, T> {
-        Class {
-            path: Path::new(),
-            data: self.data
-        }
-    }
-
-    fn push<Name, O: Sized>(self, other: O) -> Class<P, HCons<(Path<Hlist![Name, P]>, O), T>> {
-        let head: (Path<Hlist![Name, P]>, O) = (Path::new(), other);
-        Class {
-            path: Path::new(),
-            data: HCons {
-                head: head,
-                tail: self.data
-            }
-        }
-    }
-    
-    fn with<Name, F>(self, constructor: F) -> <Self as AddClass<Name, F>>::Output
-    where 
-        Self: AddClass<Name, F>
-    {
-        self.init(constructor)
-    }
-
-    fn from<F>(self, constructor: F) -> <Self as AddClass<P, F>>::Output
-    where 
-        Self: AddClass<P, F>
-    {
-        self.init(constructor)
-    }
-
-    pub fn new<F>(constructor: F) -> <Class<HNil, HNil> as AddClass<HNil, F>>::Output where Class<HNil, HNil>: AddClass<HNil, F> {
-        Class {
-            path: Path::new(),
-            data: HNil,
-        }.init(constructor)
-    }
-}
-
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Debug)]
 pub struct Path<T> {
     path: PhantomData<T>
+}
+
+impl <T> Clone for Path<T> {
+    fn clone(&self) -> Path<T> {
+        Path::new()
+    }
 }
 
 impl<P> Path<P> {
@@ -215,46 +72,98 @@ impl<P> Path<P> {
     }
 }
 
-pub struct VEntry<P, T> {
-    path: Path<P>,
-    data: PhantomData<T>
+#[derive(Copy, Clone, Debug)]
+pub struct Type<T> {
+    path: PhantomData<T>
 }
 
-struct P1;
-struct P2;
-struct P3;
-struct P4;
-struct P5;
-
-struct Var<P, T> {
-    path: Path<P>,
-    data: T
+impl<T> Type<T> {
+    pub fn new() -> Type<T> {
+        Type {
+            path: PhantomData
+        }
+    }
 }
 
-fn testfn() {
-    let cls: Class<P1, _> = Class::new(|this| {
-        // let this = this.push::<P2, _>(|this| {
-        //     hlist![(P2, 23f32), (P3, 23f64)]
-        // });
-        hlist![
-            Var::<P1, f32> {
-                path: Path::new(),
-                data: 32.
-            },
-            Var::<P2, f32> {
-                path: Path::new(),
-                data: 32.
-            },
-            Var::<P3, f32> {
-                path: Path::new(),
-                data: 32.
-            },
-            Var::<P4, f32> {
-                path: Path::new(),
-                data: 32.
-            },
-        ]
-    });
+pub struct Const<P, T: Sized, F: Fn() -> T> {
+    path: Path<P>,
+    ty: Type<T>,
+    init: F
+}
 
-    println!("{:?}", cls);
+impl<P, T: Sized, F: Fn() -> T> Const<P, T, F> {
+    pub fn new(path: P, init: F) -> Const<P, T, F> {
+        Const {
+            path: Path::new(),
+            ty: Type::new(),
+            init
+        }
+    }
+}
+
+impl<P, T: Sized, F: Fn() -> T> Entry for Const<P, T, F> {
+    type Path = Path<P>;
+    type Data = F;
+
+    fn get_path(&self) -> Path<P> {
+        Path::new()
+    }
+
+    fn get_data(self) -> (Path<P>, F) {
+        (self.path, self.init)
+    }
+
+    fn borrow_data(&self) -> &F {
+        &self.init
+    }
+}
+
+
+
+pub fn instantiate<'a, T>(list: &'a T) -> PinBox<T>
+where
+    T: ToRef<'a>,
+    <T as ToRef<'a>>::Output: FoldL<GetSizeFold, usize, Output=usize> + FoldR<InitFold, *mut (), Output=*mut ()>,
+{
+    let fold = GetSizeFold;
+    
+    let capacity = list.to_ref().foldl(fold, 0);
+    let vec = Vec::<u8>::with_capacity(capacity);
+    unsafe {
+        let ptr = vec.as_ptr();
+        // println!("test {:?}", ptr as usize);
+        let ptr: *mut () = std::mem::transmute(ptr);
+        println!("starting at... {:?}", ptr);
+        let fold = InitFold {};
+        let ptr = list.to_ref().foldr(fold, ptr);
+        println!("ending at... {:?}", ptr);
+        let ptr: *mut u8 = std::mem::transmute(ptr);
+        PinBox::<T>::from_raw(std::mem::transmute(ptr.offset(-(capacity as isize))))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::*;
+
+    struct P1();
+    struct P2();
+    struct P3();
+    struct P4();
+
+    #[test]
+    fn testfn() {
+        let list = hlist![
+            Const::new(P1, || 1),
+            Const::new(P2, || 2),
+            Const::new(P3, || 1),
+        ];
+        let mem: &u32 = unsafe {
+            let pinbox = instantiate(&list);
+            std::mem::transmute(PinBox::into_raw(pinbox))
+        };
+        println!("deref: {}", *mem);
+        println!("reg: {}", mem);
+        assert_eq!(1, *mem);
+    }
 }
