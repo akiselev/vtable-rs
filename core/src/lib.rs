@@ -128,9 +128,13 @@ where
     let fold = GetSizeFold;
     
     let capacity = list.to_ref().foldl(fold, 0);
+    println!("cap: {}", capacity);
     let vec = Vec::<u8>::with_capacity(capacity);
     unsafe {
-        let ptr = vec.as_ptr();
+        let vec_ptr = vec.as_ptr();
+        println!("p1: {:?}", vec_ptr);
+        let ptr = vec_ptr.offset(capacity as isize);
+        println!("p2: {:?}", ptr);
         // println!("test {:?}", ptr as usize);
         let ptr: *mut () = std::mem::transmute(ptr);
         println!("starting at... {:?}", ptr);
@@ -138,7 +142,7 @@ where
         let ptr = list.to_ref().foldr(fold, ptr);
         println!("ending at... {:?}", ptr);
         let ptr: *mut u8 = std::mem::transmute(ptr);
-        PinBox::<T>::from_raw(std::mem::transmute(ptr.offset(-(capacity as isize))))
+        PinBox::<T>::from_raw(std::mem::transmute(vec_ptr))
     }
 }
 
@@ -156,14 +160,18 @@ mod tests {
         let list = hlist![
             Const::new(P1, || 1),
             Const::new(P2, || 2),
-            Const::new(P3, || 1),
+            Const::new(P3, || 3),
         ];
-        let mem: &u32 = unsafe {
+        unsafe {
             let pinbox = instantiate(&list);
-            std::mem::transmute(PinBox::into_raw(pinbox))
+            let ptr: *const u32 = std::mem::transmute(PinBox::into_raw(pinbox));
+            println!("final ptr: {:?}", ptr);
+            assert_eq!(1, *ptr);
+            assert_eq!(2, *(ptr.offset(1)));
+            println!("final ptr: {:?}", ptr.offset(1));
+            assert_eq!(3, *(ptr.offset(2)));
+            println!("final ptr: {:?}", ptr.offset(2));
+
         };
-        println!("deref: {}", *mem);
-        println!("reg: {}", mem);
-        assert_eq!(1, *mem);
     }
 }
