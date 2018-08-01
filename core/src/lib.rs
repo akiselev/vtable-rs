@@ -4,7 +4,6 @@ use std::ops::{Index, Deref, DerefMut};
 use std::borrow::Borrow;
 use std::mem::PinMut;
 use std::boxed::PinBox;
-use vtable_derive::symbol;
 
 use std::marker::PhantomData;
 use frunk::*;
@@ -56,7 +55,18 @@ impl<T, HEAD, TAIL> Push<T> for HCons<HEAD, TAIL> {
     }
 }
 
-impl<Name, P, T> At<Name> for Class<P, T> {
+impl<T> At<HNil> for Class<HNil, T> {
+    type AtRes = Class<HNil, T>;
+
+    fn at(self) -> Class<HNil, T> {
+        Class {
+            path: Path::new(),
+            data: self.data
+        }
+    }
+}
+
+default impl<Name, P, T> At<Name> for Class<P, T> {
     type AtRes = Class<HCons<Name, P>, T>;
 
     fn at(self) -> Class<HCons<Name, P>, T> {
@@ -120,17 +130,18 @@ where
     }
 }
 
+
 impl<P, T, Name, F, OLIST: HList, X, Y, FINAL> AddClass<Name, F> for Class<P, T> 
 where
     Self: At<Name>,
     Self::AtRes: Entry<Data=T>,
     X: Entry,
     F: Fn(Y) -> OLIST,
-    T: Push<(PhantomData<HCons<Name, HCons<P, HNil>>>, F)>,
-    <X as Entry>::Data: Fn(Y) -> Class<P, OLIST>,
-    <Class<P, T> as At<Name>>::AtRes: Push<(Path<Hlist![Name, P]>, F)>,
-    <<Class<P, T> as At<Name>>::AtRes as Push<(Path<Hlist![Name, P]>, F)>>::PushRes: for<'this> ToRef<'this, Output=HCons<X, Y>> + Push<OLIST>,
-    <<<Class<P, T> as At<Name>>::AtRes as Push<(Path<HCons<Name, HCons<P, HNil>>>, F)>>::PushRes as Push<OLIST>>::PushRes: Entry<Data=FINAL>
+    T: Push<(Path<HCons<Name, P>>, F)>,
+    <X as Entry>::Data: Fn(Y) -> OLIST,
+    <Class<P, T> as At<Name>>::AtRes: Push<(Path<HCons<Name, P>>, F)>,
+    <<Class<P, T> as At<Name>>::AtRes as Push<(Path<HCons<Name, P>>, F)>>::PushRes: for<'this> ToRef<'this, Output=HCons<X, Y>> + Push<OLIST>,
+    <<<Class<P, T> as At<Name>>::AtRes as Push<(Path<HCons<Name, P>>, F)>>::PushRes as Push<OLIST>>::PushRes: Entry<Data=FINAL>
 {
     type Output = Class<P, FINAL>;
 
@@ -185,7 +196,7 @@ impl<P: HList, T> Class<P, T> {
 
     pub fn new<F>(constructor: F) -> <Class<HNil, HNil> as AddClass<HNil, F>>::Output where Class<HNil, HNil>: AddClass<HNil, F> {
         Class {
-            path: HNil,
+            path: Path::new(),
             data: HNil,
         }.init(constructor)
     }
@@ -207,4 +218,43 @@ impl<P> Path<P> {
 pub struct VEntry<P, T> {
     path: Path<P>,
     data: PhantomData<T>
+}
+
+struct P1;
+struct P2;
+struct P3;
+struct P4;
+struct P5;
+
+struct Var<P, T> {
+    path: Path<P>,
+    data: T
+}
+
+fn testfn() {
+    let cls: Class<P1, _> = Class::new(|this| {
+        // let this = this.push::<P2, _>(|this| {
+        //     hlist![(P2, 23f32), (P3, 23f64)]
+        // });
+        hlist![
+            Var::<P1, f32> {
+                path: Path::new(),
+                data: 32.
+            },
+            Var::<P2, f32> {
+                path: Path::new(),
+                data: 32.
+            },
+            Var::<P3, f32> {
+                path: Path::new(),
+                data: 32.
+            },
+            Var::<P4, f32> {
+                path: Path::new(),
+                data: 32.
+            },
+        ]
+    });
+
+    println!("{:?}", cls);
 }

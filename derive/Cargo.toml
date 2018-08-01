@@ -1,10 +1,10 @@
-cargo-features = ["edition"]
+# cargo-features = ["edition"]
 
 [package]
 name = "vtable-derive"
 version = "0.1.0"
 authors = ["Alexander Kiselev <tyrant91101@gmail.com>"]
-edition = '2018'
+# edition = '2018'
 
 [lib]
 name = "vtable_derive"

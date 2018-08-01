@@ -14,6 +14,6 @@ frunk = "0.2.0"
 frunk_core = "0.2.0"
 failure = "0.1.1"
 
-[dependencies.vtable-derive]
-path = "../derive"
-version = "0.1"
+# [dependencies.vtable-derive]
+# path = "../derive"
+# version = "0.1"
