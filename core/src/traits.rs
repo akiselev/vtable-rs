@@ -1,81 +1,8 @@
-use std::ops::{Index, Deref, DerefMut};
-
-use std::rc::Rc;
-use std::cell::Cell;
+use std::ops::CoerceUnsized;
 
 use frunk::hlist::{HCons, HNil};
-use frunk_core::indices::{Here, There};
 use frunk_core::traits::*;
 use crate::*;
-
-pub trait Symbol: Copy + Clone {
-    type Type;
-
-    fn as_path(&self) -> HCons<Self, HNil> {
-        HCons {
-            head: self.clone(),
-            tail: HNil
-        }
-    }
-}
-
-pub trait VPath: Symbol {
-    type Parent;
-}
-
-pub trait Parent {
-    type Path: VPath;
-    type Symbol: Symbol;
-}
-
-impl<SYM: Symbol, PATH: VPath> VPath for HCons<SYM, PATH> {
-    type Parent = PATH;
-}
-
-impl<SYM: Symbol, PATH: Copy + Clone> Symbol for HCons<SYM, PATH> {
-    type Type = SYM::Type;
-}
-
-impl<SYM: Symbol> VPath for HCons<SYM, HNil> {
-    type Parent = HNil;
-}
-
-impl<SYM: Symbol, PSYM: Symbol, PATH: VPath> Parent for HCons<SYM, HCons<PSYM, PATH>> {
-    type Path = PATH;
-    type Symbol = PSYM;
-}
-
-pub trait VirtualRef<'virt, S> : Deref<Target=S::Type>
-where
-    S: Symbol,
-{}
-
-pub trait VirtualRefMut<'virt, S> : DerefMut<Target=S::Type>
-where
-    S: Symbol,
-{}
-
-pub trait GetVirtual<'this, 'virt, S>
-where
-    S: Symbol,
-    Self: 'this,
-    'this: 'virt
-{
-    type Output: VirtualRef<'virt, S>;
-
-    fn get_ref(&'this self) -> Self::Output;
-}
-
-pub trait GetVirtualMut<'this, 'virt, S>
-where
-    S: Symbol,
-    Self: 'this,
-    'this: 'virt
-{
-    type Output: VirtualRefMut<'virt, S>;
-
-    fn get_mut_ref(&'this mut self) -> Self::Output;
-}
 
 pub trait FoldL<Folder, Acc> {
     type Output;
@@ -83,7 +10,7 @@ pub trait FoldL<Folder, Acc> {
     fn foldl(self, folder: Folder, acc: Acc) -> Self::Output;
 }
 
-impl<F, Acc> FoldL<F, Acc> for HNil {
+impl<F, Acc: HList> FoldL<F, Acc> for HNil {
     type Output = Acc;
 
     fn foldl(self, _: F, acc: Acc) -> Self::Output {
@@ -111,7 +38,7 @@ pub trait FoldR<Folder, Init> {
     fn foldr(self, folder: Folder, i: Init) -> Self::Output;
 }
 
-impl<F, Init> FoldR<F, Init> for HNil {
+impl<F, Init> FoldR<F, Init> for HNil where Init: HList {
     type Output = Init;
 
     fn foldr(self, _: F, i: Init) -> Self::Output {
@@ -124,6 +51,7 @@ impl<F, FolderHeadR, H, Tail, Init> FoldR<F, Init>
 where
     Tail: FoldR<F, Init>,
     F: Clone + FnOnce(H, <Tail as FoldR<F, Init>>::Output) -> FolderHeadR,
+    FolderHeadR: HList
 {
     type Output = FolderHeadR;
 
@@ -134,7 +62,7 @@ where
 }
 
 pub trait Map<Mapper: Clone> {
-    type Output;
+    type Output: HList;
 
     fn map(self, mapper: Mapper) -> Self::Output;
 }
@@ -151,7 +79,8 @@ impl<F, R, H, T, T1, T2> Map<F> for HCons<H, T>
 where
     F: Clone + Fn(H) -> R,
     T: Map<F, Output=T1>,
-    T1: Add<R, Output=T2>
+    T1: Add<R, Output=T2> + HList,
+    T2: HList
 {
     type Output = T2;
 
@@ -161,8 +90,24 @@ where
     }
 }
 
-pub trait AsChild<P> {
+pub trait Append<O> {
     type Output;
+
+    fn append(self, other: O) -> Self::Output;
+}
+
+impl<O, T, T1, T2> Append<O> for T
+where T: Add<O, Output=T1>, T1: IntoReverse<Output=T2>
+{
+    type Output = T2;
+
+    fn append(self, other: O) -> Self::Output {
+        (self + other).into_reverse()
+    }
+}
+
+pub trait AsChild<P> {
+    type Output: HList;
 
     fn as_child(self) -> Self::Output;
 }
@@ -179,36 +124,92 @@ impl<P, P2, C, H, T, T1, T2> AsChild<C> for HCons<(Path<P>, H), T>
 where
     T: AsChild<C, Output=T1>,
     C: Add<P, Output=P2>,
-    T1: Add<Hlist![(Path<P2>, H)], Output=T2>
+    T1: Append<Hlist![(Path<P2>, H)], Output=T2> + HList,
+    T2: HList
 {
     type Output = T2;
 
     fn as_child(self) -> Self::Output {
-        self.tail.as_child() + hlist![(Path::new(), self.head.1)]
+        self.tail.as_child().append(hlist![(Path::new(), self.head.1)])
     }
 }
 
+trait ToHNil { type Output: HList; fn to_hnil(self) -> Self::Output; }
+impl<T> ToHNil for T { type Output = HNil; fn to_hnil(self) -> HNil { HNil } }
 
+pub trait FilterBy<F: ?Sized> {
+    type Output: HList;
 
-#[cfg(test)]
-mod tests {
-    use crate::*;
+    fn filter_by(self) -> Self::Output;
+}
 
-    path!(P1, P2, P3, P4);
+// default impl<F: ?Sized, T> FilterBy<F> for T where T: ToHNil, <T as ToHNil>::Output: HList {
+//     type Output = <T as ToHNil>::Output;
 
-    #[test]
-    fn add_child() {
-        let list = hlist![
-            (Path::<Hlist![P1]>::new(), 1),
-            (Path::<Hlist![P2]>::new(), 2),
-            (Path::<Hlist![P3]>::new(), 3),
-            (Path::<Hlist![P4]>::new(), 4),
-        ];
+//     fn filter_by(self) -> Self::Output {
+//         *!
+//     }
+// }
 
-        println!("1: {:?}", list);
-        let list = AsChild::<Hlist![P1]>::as_child(list);
-        let list = AsChild::<Hlist![P2]>::as_child(list);
-        let list = AsChild::<Hlist![P3]>::as_child(list);
-        println!("2: {:?}", list);        
+impl<F: ?Sized, P, T, H, H1, H2> FilterBy<F> for HCons<(Path<P>, T), H>
+where
+    F: CoerceUnsized<T>,
+    H: FilterBy<F, Output=H1>,
+    H1: HList,
+    H2: HList,
+    HCons<(Path<P>, T), HNil>: Append<H1, Output=H2>,
+{
+    type Output = <HCons<(Path<P>, T), HNil> as Append<H1>>::Output;
+
+    fn filter_by(self) -> <HCons<(Path<P>, T), HNil> as Append<H1>>::Output {
+        HCons { head: self.head, tail: HNil }.append(self.tail.filter_by())
     }
 }
+
+// impl<'a, F: ?Sized, P, T, H, H1> FilterBy<F> for HCons<&'a (Path<P>, T), H>
+// where
+//     F: CoerceUnsized<T>,
+//     H: FilterBy<F, Output=H1> + ToHNil<Output=HNil>,
+//     H1: HList,
+//     H2: HList,
+//     HCons<&'a (Path<P>, T), HNil>: Append<H1, Output=H2>,
+// {
+//     type Output = <HCons<&'a (Path<P>, T), HNil> as Append<H1>>::Output;
+
+//     fn filter_by(self) -> <HCons<&'a (Path<P>, T), HNil> as Append<H1>>::Output {
+//         hlist![self.head].append(self.tail.filter_by())
+//     }
+// }
+
+default impl<H, T, F: ?Sized> FilterBy<F> for HCons<T, H>
+where
+    H: FilterBy<F>,
+{
+    type Output = <H as FilterBy<F>>::Output;
+
+    fn filter_by(self) -> Self::Output {
+        self.filter_by()
+    }
+}
+
+// trait DefaultResult {
+//     type Output;
+
+//     fn get() -> Self::Output;
+// }
+
+// impl<T> DefaultResult for T {
+//     type Output = HNil;
+
+//     fn get() -> Self::Output {
+//         HNil
+//     }
+// }
+
+// impl<F: ?Sized, T> FilterBy<F> for T {
+//     default type Output = HNil;
+
+//     default fn filter_by(self) -> ! {
+//         HNil
+//     }
+// }

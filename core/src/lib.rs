@@ -1,11 +1,10 @@
-#![feature(async_await, await_macro, pin, fn_traits, arbitrary_self_types, futures_api, proc_macro, proc_macro_span, proc_macro_raw_ident, never_type, specialization, unboxed_closures)]
+#![feature(async_await, await_macro, associated_type_defaults, coerce_unsized, pin, fn_traits, arbitrary_self_types, futures_api, proc_macro, proc_macro_span, proc_macro_raw_ident, never_type, specialization, unboxed_closures)]
 
 use std::ops::{Index, Deref, DerefMut};
 use std::borrow::Borrow;
 use std::mem::PinMut;
 use std::boxed::PinBox;
 use std::ops::Add;
-use std::fmt::{Formatter, Debug, Result as DebugResult};
 
 use std::marker::PhantomData;
 use frunk::*;
@@ -21,6 +20,9 @@ pub use crate::traits::*;
 
 mod folds;
 pub use crate::folds::*;
+
+mod path;
+pub use crate::path::*;
 
 trait At<Name> {
     type AtRes;
@@ -55,45 +57,6 @@ impl<H: InitSize, T: InitSize> InitSize for HCons<H, T> {
     const SIZE: usize = H::SIZE + T::SIZE;
 }
 
-#[derive(Copy)]
-pub struct Path<T> {
-    path: PhantomData<T>
-}
-
-// default impl<T: Debug> Debug for Path<T> {
-//     fn fmt(&self, f: &mut Formatter) -> DebugResult {
-//         write!(f, "")
-//     }
-// } 
-
-// impl<T: Debug, H> Debug for Path<HCons<T, H>> where Path<H>: Debug {
-//     fn fmt(&self, f: &mut Formatter) -> DebugResult {
-//         unsafe {
-//             /**
-//              * Paths should be uninhabited types so uninitialized ZSTs are fine
-//              * 
-//              * TODO: THIS IS REALLY STUPID, COME UP WITH A DERIVE MACRO!!
-//              */
-//             let res = Debug::fmt(&std::mem::zeroed::<Path<T>>(), f)?;
-//             let res = Debug::fmt(&std::mem::zeroed::<Path<H>>(), f)?;
-//             write!(f, "{:?}, ", res)
-//         }
-//     }
-// }
-
-impl <T> Clone for Path<T> {
-    fn clone(&self) -> Path<T> {
-        Path::new()
-    }
-}
-
-impl<P> Path<P> {
-    pub fn new() -> Path<P> {
-        Path {
-            path: PhantomData
-        }
-    }
-}
 
 #[derive(Copy, Clone, Debug)]
 pub struct Type<T> {
@@ -151,19 +114,14 @@ where
     let fold = GetSizeFold;
     
     let capacity = list.to_ref().foldl(fold, 0);
-    println!("cap: {}", capacity);
     let vec = Vec::<u8>::with_capacity(capacity);
     unsafe {
         let vec_ptr = vec.as_ptr();
-        println!("p1: {:?}", vec_ptr);
         let ptr = vec_ptr.offset(capacity as isize);
-        println!("p2: {:?}", ptr);
         // println!("test {:?}", ptr as usize);
         let ptr: *mut () = std::mem::transmute(ptr);
-        println!("starting at... {:?}", ptr);
         let fold = InitFold {};
         let ptr = list.to_ref().foldr(fold, ptr);
-        println!("ending at... {:?}", ptr);
         let ptr: *mut u8 = std::mem::transmute(ptr);
         PinBox::<T>::from_raw(std::mem::transmute(vec_ptr))
     }
@@ -188,12 +146,9 @@ mod tests {
         unsafe {
             let pinbox = instantiate(&list);
             let ptr: *const u32 = std::mem::transmute(PinBox::into_raw(pinbox));
-            println!("final ptr: {:?}", ptr);
             assert_eq!(1, *ptr);
             assert_eq!(2, *(ptr.offset(1)));
-            println!("final ptr: {:?}", ptr.offset(1));
             assert_eq!(3, *(ptr.offset(2)));
-            println!("final ptr: {:?}", ptr.offset(2));
         };
     }
 }
@@ -226,7 +181,8 @@ where
     O1: for<'refs> ToRef<'refs, Output=HCons<&'refs F, &'refs O2>>,
     F: for<'init> Fn(&'init O2) -> O3,
     O3: AsChild<P, Output=O4>,
-    O1: Add<O4, Output=O5>
+    O1: Add<O4, Output=O5>,
+    O4: HList
 {
     type Output = O5;
 

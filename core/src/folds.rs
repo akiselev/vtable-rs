@@ -1,3 +1,4 @@
+use std::marker::PhantomData;
 use frunk::prelude::*;
 use frunk_core::*;
 use frunk_core::hlist::*;
@@ -30,12 +31,9 @@ where T: Sized + std::fmt::Debug, F: Fn() -> T
         let (var, ptr) = args;
         let ptr = unsafe {
             let dest: *mut T = std::mem::transmute(ptr);
-            println!("pp1 {:?}", dest);
             let dest = dest.offset(-1);
             let init = (&var.init)();
-            println!("init: {:?}", init);
             *dest = init;
-            println!("pp2 {:?}", dest);
             std::mem::transmute(dest)
         };
         ptr
@@ -61,5 +59,38 @@ impl<'a, Acc> FnOnce<(&'a HNil, Acc)> for PathMapper
     
     extern "rust-call" fn call_once(self, args: (&'a HNil, Acc)) -> Acc {
         args.1
+    }
+}
+
+
+#[derive(Clone, Debug)]
+pub struct ImplFold<F: ?Sized>(std::marker::PhantomData<F>);
+
+impl<F: ?Sized> ImplFold<F> {
+    pub fn new() -> ImplFold<F> {
+        ImplFold(PhantomData)
+    }
+}
+
+impl< T, T1, F, Acc> FnOnce<(T, Acc)> for ImplFold<F>
+where T: Sized + Entry<Data=T1>, F: std::ops::CoerceUnsized<T1>
+{
+    type Output = HCons<T, Acc>;
+    
+    extern "rust-call" fn call_once(self, args: (T, Acc)) -> HCons<T, Acc> {
+       HCons {
+           head: args.0,
+           tail: args.1
+       }
+    }
+}
+
+impl<'a, T, F, Acc> FnOnce<(T, Acc)> for ImplFold<F>
+where T: Sized
+{
+    default type Output = Acc;
+    
+    default extern "rust-call" fn call_once(self, args: (T, Acc)) -> Self::Output {
+       self.1
     }
 }
