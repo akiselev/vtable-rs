@@ -4,6 +4,8 @@ use std::ops::{Index, Deref, DerefMut};
 use std::borrow::Borrow;
 use std::mem::PinMut;
 use std::boxed::PinBox;
+use std::ops::Add;
+use std::fmt::{Formatter, Debug, Result as DebugResult};
 
 use std::marker::PhantomData;
 use frunk::*;
@@ -53,10 +55,31 @@ impl<H: InitSize, T: InitSize> InitSize for HCons<H, T> {
     const SIZE: usize = H::SIZE + T::SIZE;
 }
 
-#[derive(Copy, Debug)]
+#[derive(Copy)]
 pub struct Path<T> {
     path: PhantomData<T>
 }
+
+// default impl<T: Debug> Debug for Path<T> {
+//     fn fmt(&self, f: &mut Formatter) -> DebugResult {
+//         write!(f, "")
+//     }
+// } 
+
+// impl<T: Debug, H> Debug for Path<HCons<T, H>> where Path<H>: Debug {
+//     fn fmt(&self, f: &mut Formatter) -> DebugResult {
+//         unsafe {
+//             /**
+//              * Paths should be uninhabited types so uninitialized ZSTs are fine
+//              * 
+//              * TODO: THIS IS REALLY STUPID, COME UP WITH A DERIVE MACRO!!
+//              */
+//             let res = Debug::fmt(&std::mem::zeroed::<Path<T>>(), f)?;
+//             let res = Debug::fmt(&std::mem::zeroed::<Path<H>>(), f)?;
+//             write!(f, "{:?}, ", res)
+//         }
+//     }
+// }
 
 impl <T> Clone for Path<T> {
     fn clone(&self) -> Path<T> {
@@ -171,7 +194,80 @@ mod tests {
             println!("final ptr: {:?}", ptr.offset(1));
             assert_eq!(3, *(ptr.offset(2)));
             println!("final ptr: {:?}", ptr.offset(2));
-
         };
+    }
+}
+
+struct Builder<O> {
+    data: O
+}
+
+trait Init<P, F> {
+    type Output;
+
+    fn init(self, func: F) -> Self::Output;
+}
+
+trait Parent {
+    type Path;
+}
+
+impl<H, T> Parent for Path<HCons<H, T>> {
+    type Path = T;
+}
+
+impl<H, T> Parent for (Path<H>, T) where Path<H>: Parent {
+    type Path = <Path<H> as Parent>::Path;
+}
+
+impl<O, O1, O2, O3, O4, O5, P, F> Init<P, F> for Builder<O>
+where
+    O: Add<F, Output=O1>,
+    O1: for<'refs> ToRef<'refs, Output=HCons<&'refs F, &'refs O2>>,
+    F: for<'init> Fn(&'init O2) -> O3,
+    O3: AsChild<P, Output=O4>,
+    O1: Add<O4, Output=O5>
+{
+    type Output = O5;
+
+    fn init(self, func: F) -> Self::Output {
+        let Builder { data } = self;
+        let data = data + func;
+        let new = {
+            let HCons { head, tail } = data.to_ref();
+            head(&tail).as_child()
+        };
+        data + new
+    }
+}
+
+trait Replace<P, F> {
+    type Output;
+
+    fn replace(self, func: F) -> Self::Output;
+}
+
+// impl<O, O1, O2, P, F> Replace<P, F> for Builder<O>
+// where
+//     O: Map<PathMapper, Output=O1>,
+//     F: Fn(O1) -> O2,
+//     O2: 
+// {
+
+// }
+
+fn testfn() {
+
+}
+
+#[cfg(test)]
+mod tests2 {
+    use crate::*;
+    use frunk_core::hlist::*;
+
+    #[test]
+    fn test() {
+        let x = hlist![0, 1] + hlist![2, 3];
+        println!("{:?}", x);
     }
 }

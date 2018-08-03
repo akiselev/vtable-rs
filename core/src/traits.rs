@@ -5,6 +5,8 @@ use std::cell::Cell;
 
 use frunk::hlist::{HCons, HNil};
 use frunk_core::indices::{Here, There};
+use frunk_core::traits::*;
+use crate::*;
 
 pub trait Symbol: Copy + Clone {
     type Type;
@@ -53,15 +55,6 @@ where
     S: Symbol,
 {}
 
-// pub trait Concrete<'this, 'virt, S>
-// where
-//     S: Symbol, Self: 'this, 'this: 'virt, Self::Output: 'virt
-// {
-//     type Output: VirtualRef<'virt, S>;
-
-//     fn get_ref(&self) -> Self::Output;
-// }
-
 pub trait GetVirtual<'this, 'virt, S>
 where
     S: Symbol,
@@ -84,16 +77,6 @@ where
     fn get_mut_ref(&'this mut self) -> Self::Output;
 }
 
-/// Trait for performing a left fold over an HList
-///
-/// This trait is part of the implementation of the inherent method
-/// [`HCons::foldl`]. Please see that method for more information.
-///
-/// You only need to import this trait when working with generic
-/// HLists or Mappers of unknown type. If the type of everything is known,
-/// then `list.foldl(f, acc)` should "just work" even without the trait.
-///
-/// [`HCons::foldl`]: struct.HCons.html#method.foldl
 pub trait FoldL<Folder, Acc> {
     type Output;
     
@@ -111,13 +94,13 @@ impl<F, Acc> FoldL<F, Acc> for HNil {
 impl<F, Acc, H, R, Tail> FoldL<F, Acc> for HCons<H, Tail>
 where
     Tail: FoldL<F, R>,
-    F: Fn(Acc, H) -> R
+    F: Clone + FnOnce(Acc, H) -> R
 {
     type Output = <Tail as FoldL<F, R>>::Output;
 
     fn foldl(self, folder: F, acc: Acc) -> Self::Output {
         let HCons { head, tail } = self;
-        let res = folder(acc, head);
+        let res = (folder.clone())(acc, head);
         tail.foldl(folder, res)
     }
 }
@@ -125,15 +108,6 @@ where
 pub trait FoldR<Folder, Init> {
     type Output;
 
-    /// Perform a right fold over an HList.
-    ///
-    /// Please see the [inherent method] for more information.
-    ///
-    /// The only difference between that inherent method and this
-    /// trait method is the location of the type parameters.
-    /// (here, they are on the trait rather than the method)
-    ///
-    /// [inherent method]: struct.HCons.html#method.foldr
     fn foldr(self, folder: Folder, i: Init) -> Self::Output;
 }
 
@@ -159,28 +133,82 @@ where
     }
 }
 
-impl<'a, F, R, H, Tail, Init> FoldR<&'a F, Init> for HCons<H, Tail>
-where
-    Tail: FoldR<&'a F, Init>,
-    F: Clone + Fn(H, <Tail as FoldR<&'a F, Init>>::Output) -> R,
-{
+pub trait Map<Mapper: Clone> {
+    type Output;
 
-    fn foldr(self, folder: &'a F, init: Init) -> Self::Output {
-        let folded_tail = self.tail.foldr(folder, init);
-        (folder)(self.head, folded_tail)
+    fn map(self, mapper: Mapper) -> Self::Output;
+}
+
+impl<F: Clone> Map<F> for HNil {
+    type Output = HNil;
+
+    fn map(self, _: F) -> Self::Output {
+        HNil
+    }
+}
+
+impl<F, R, H, T, T1, T2> Map<F> for HCons<H, T>
+where
+    F: Clone + Fn(H) -> R,
+    T: Map<F, Output=T1>,
+    T1: Add<R, Output=T2>
+{
+    type Output = T2;
+
+    fn map(self, f: F) -> Self::Output {
+        let HCons { head, tail } = self;
+        tail.map(f.clone()) + f(head)
+    }
+}
+
+pub trait AsChild<P> {
+    type Output;
+
+    fn as_child(self) -> Self::Output;
+}
+
+impl<P> AsChild<P> for HNil {
+    type Output = HNil;
+
+    fn as_child(self) -> Self::Output {
+        HNil
+    }
+}
+
+impl<P, P2, C, H, T, T1, T2> AsChild<C> for HCons<(Path<P>, H), T>
+where
+    T: AsChild<C, Output=T1>,
+    C: Add<P, Output=P2>,
+    T1: Add<Hlist![(Path<P2>, H)], Output=T2>
+{
+    type Output = T2;
+
+    fn as_child(self) -> Self::Output {
+        self.tail.as_child() + hlist![(Path::new(), self.head.1)]
     }
 }
 
 
-// impl<'a, F, R, H, Tail, Init> FoldR<F, Init> for HCons<H, Tail>
-// where
-//     Tail: FoldR<F, Init>,
-//     F: Clone + Fn(H, <Tail as FoldR<F, Init>>::Output) -> R,
-// {
-//     type Output = R;
 
-//     fn foldr(self, folder: F, init: Init) -> Self::Output {
-//         let folded_tail = self.tail.foldr(folder.clone(), init);
-//         (folder)(self.head, folded_tail)
-//     }
-// }
+#[cfg(test)]
+mod tests {
+    use crate::*;
+
+    path!(P1, P2, P3, P4);
+
+    #[test]
+    fn add_child() {
+        let list = hlist![
+            (Path::<Hlist![P1]>::new(), 1),
+            (Path::<Hlist![P2]>::new(), 2),
+            (Path::<Hlist![P3]>::new(), 3),
+            (Path::<Hlist![P4]>::new(), 4),
+        ];
+
+        println!("1: {:?}", list);
+        let list = AsChild::<Hlist![P1]>::as_child(list);
+        let list = AsChild::<Hlist![P2]>::as_child(list);
+        let list = AsChild::<Hlist![P3]>::as_child(list);
+        println!("2: {:?}", list);        
+    }
+}
