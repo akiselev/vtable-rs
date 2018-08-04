@@ -62,7 +62,6 @@ impl<'a, Acc> FnOnce<(&'a HNil, Acc)> for PathMapper
     }
 }
 
-
 #[derive(Clone, Debug)]
 pub struct ImplFold<F: ?Sized>(std::marker::PhantomData<F>);
 
@@ -72,7 +71,7 @@ impl<F: ?Sized> ImplFold<F> {
     }
 }
 
-impl< T, T1, F, Acc> FnOnce<(T, Acc)> for ImplFold<F>
+default impl< T, T1, F: ?Sized, Acc> FnOnce<(T, Acc)> for ImplFold<F>
 where T: Sized + Entry<Data=T1>, F: std::ops::CoerceUnsized<T1>
 {
     type Output = HCons<T, Acc>;
@@ -85,12 +84,12 @@ where T: Sized + Entry<Data=T1>, F: std::ops::CoerceUnsized<T1>
     }
 }
 
-impl<'a, T, F, Acc> FnOnce<(T, Acc)> for ImplFold<F>
+impl<'a, T, F: ?Sized, Acc> FnOnce<(T, Acc)> for ImplFold<F>
 where T: Sized
 {
     default type Output = Acc;
     
     default extern "rust-call" fn call_once(self, args: (T, Acc)) -> Self::Output {
-       self.1
+       args.1
     }
 }

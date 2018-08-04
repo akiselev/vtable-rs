@@ -1,4 +1,4 @@
-#![feature(async_await, await_macro, associated_type_defaults, coerce_unsized, pin, fn_traits, arbitrary_self_types, futures_api, proc_macro, proc_macro_span, proc_macro_raw_ident, never_type, specialization, unboxed_closures)]
+#![feature(async_await, await_macro, associated_type_defaults, unsize, coerce_unsized, pin, fn_traits, arbitrary_self_types, futures_api, proc_macro, proc_macro_span, proc_macro_raw_ident, never_type, specialization, unboxed_closures)]
 
 use std::ops::{Index, Deref, DerefMut};
 use std::borrow::Borrow;

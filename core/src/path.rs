@@ -103,6 +103,6 @@ mod tests {
         let list = AsChild::<Hlist![P2]>::as_child(list);
         let list = AsChild::<Hlist![P3]>::as_child(list);
         println!("2: {:?}", list);
-        let list2 = FilterBy::<TestTrait>::filter_by(list);
+        // let list2 = FilterBy::<TestTrait>::filter_by(list);
     }
 }
