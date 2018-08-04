@@ -1,19 +1,21 @@
-#![feature(async_await, await_macro, associated_type_defaults, unsize, coerce_unsized, pin, fn_traits, arbitrary_self_types, futures_api, proc_macro, proc_macro_span, proc_macro_raw_ident, never_type, specialization, unboxed_closures)]
+// #![feature(async_await, await_macro, associated_type_defaults, unsize, coerce_unsized, pin, fn_traits, arbitrary_self_types, futures_api, proc_macro, proc_macro_span, proc_macro_raw_ident, never_type, specialization, unboxed_closures)]
+#![feature(rust_2018_preview, nll, unsize, coerce_unsized, fn_traits, pin, arbitrary_self_types, never_type, specialization, unboxed_closures)]
 
-use std::ops::{Index, Deref, DerefMut};
 use std::borrow::Borrow;
-use std::mem::PinMut;
 use std::boxed::PinBox;
+use std::marker::PhantomData;
+use std::mem::PinMut;
+use std::mem::size_of;
+use std::ops::{Index, Deref, DerefMut};
 use std::ops::Add;
 
-use std::marker::PhantomData;
 use frunk::*;
 use frunk::prelude::*;
 use frunk_core::*;
 use frunk_core::hlist::*;
 use frunk_core::indices::*;
 use failure::{Error, Fail};
-use std::mem::size_of;
+use serde::{Serialize, Deserialize};
 
 mod traits;
 pub use crate::traits::*;
@@ -21,42 +23,17 @@ pub use crate::traits::*;
 mod folds;
 pub use crate::folds::*;
 
+#[macro_use]
+mod macros;
+
 mod path;
 pub use crate::path::*;
 
-trait At<Name> {
-    type AtRes;
+mod builder;
+pub use crate::builder::*;
 
-    fn at(self) -> Self::AtRes;
-}
-
-trait Entry {
-    type Path: Clone;
-    type Data;
-
-    fn get_path(&self) -> Self::Path;
-    fn get_data(self) -> (Self::Path, Self::Data);
-    fn borrow_data(&self) -> &Self::Data;
-}
-
-pub trait InitSize {
-    const SIZE: usize;
-}
-
-impl InitSize for HNil {
-    const SIZE: usize = 0;
-}
-
-impl<P, T, F> InitSize for Const<P, T, F>
-where T: Sized, F: Fn() -> T
-{
-    const SIZE: usize = size_of::<T>();
-}
-
-impl<H: InitSize, T: InitSize> InitSize for HCons<H, T> {
-    const SIZE: usize = H::SIZE + T::SIZE;
-}
-
+mod primitives;
+pub use crate::primitives::*;
 
 #[derive(Copy, Clone, Debug)]
 pub struct Type<T> {
@@ -71,61 +48,7 @@ impl<T> Type<T> {
     }
 }
 
-pub struct Const<P, T: Sized, F: Fn() -> T> {
-    path: Path<P>,
-    ty: Type<T>,
-    init: F
-}
 
-impl<P, T: Sized, F: Fn() -> T> Const<P, T, F> {
-    pub fn new(path: P, init: F) -> Const<P, T, F> {
-        Const {
-            path: Path::new(),
-            ty: Type::new(),
-            init
-        }
-    }
-}
-
-impl<P, T: Sized, F: Fn() -> T> Entry for Const<P, T, F> {
-    type Path = Path<P>;
-    type Data = F;
-
-    fn get_path(&self) -> Path<P> {
-        Path::new()
-    }
-
-    fn get_data(self) -> (Path<P>, F) {
-        (self.path, self.init)
-    }
-
-    fn borrow_data(&self) -> &F {
-        &self.init
-    }
-}
-
-
-
-pub fn instantiate<'a, T>(list: &'a T) -> PinBox<T>
-where
-    T: ToRef<'a>,
-    <T as ToRef<'a>>::Output: FoldL<GetSizeFold, usize, Output=usize> + FoldR<InitFold, *mut (), Output=*mut ()>,
-{
-    let fold = GetSizeFold;
-    
-    let capacity = list.to_ref().foldl(fold, 0);
-    let vec = Vec::<u8>::with_capacity(capacity);
-    unsafe {
-        let vec_ptr = vec.as_ptr();
-        let ptr = vec_ptr.offset(capacity as isize);
-        // println!("test {:?}", ptr as usize);
-        let ptr: *mut () = std::mem::transmute(ptr);
-        let fold = InitFold {};
-        let ptr = list.to_ref().foldr(fold, ptr);
-        let ptr: *mut u8 = std::mem::transmute(ptr);
-        PinBox::<T>::from_raw(std::mem::transmute(vec_ptr))
-    }
-}
 
 #[cfg(test)]
 mod tests {
@@ -153,64 +76,47 @@ mod tests {
     }
 }
 
-struct Builder<O> {
-    data: O
-}
-
-trait Init<P, F> {
-    type Output;
-
-    fn init(self, func: F) -> Self::Output;
-}
-
-trait Parent {
-    type Path;
-}
-
-impl<H, T> Parent for Path<HCons<H, T>> {
-    type Path = T;
-}
-
-impl<H, T> Parent for (Path<H>, T) where Path<H>: Parent {
-    type Path = <Path<H> as Parent>::Path;
-}
-
-impl<O, O1, O2, O3, O4, O5, P, F> Init<P, F> for Builder<O>
-where
-    O: Add<F, Output=O1>,
-    O1: for<'refs> ToRef<'refs, Output=HCons<&'refs F, &'refs O2>>,
-    F: for<'init> Fn(&'init O2) -> O3,
-    O3: AsChild<P, Output=O4>,
-    O1: Add<O4, Output=O5>,
-    O4: HList
-{
-    type Output = O5;
-
-    fn init(self, func: F) -> Self::Output {
-        let Builder { data } = self;
-        let data = data + func;
-        let new = {
-            let HCons { head, tail } = data.to_ref();
-            head(&tail).as_child()
-        };
-        data + new
-    }
-}
-
 trait Replace<P, F> {
     type Output;
 
     fn replace(self, func: F) -> Self::Output;
 }
 
-// impl<O, O1, O2, P, F> Replace<P, F> for Builder<O>
-// where
-//     O: Map<PathMapper, Output=O1>,
-//     F: Fn(O1) -> O2,
-//     O2: 
-// {
 
-// }
+trait Binder<T> {
+
+}
+
+struct Binding<P: Sized> {
+    data: P
+}
+
+impl<T> Builder<T> {
+    pub fn push<P, P1, O: Sized>(self, other: O) -> Builder<HCons<(Path<P1>, O), T>>
+    where HNil: Add<P, Output=P1>
+    {
+        let head: (Path<P1>, O) = (Path::new(), other);
+        Builder {
+            data: HCons {
+                head: head,
+                tail: self.data
+            }
+        }
+    }
+    
+    pub fn new<F, O>(self, constructor: F) -> O
+    where 
+        Self: Init<F, HNil, Output=O>
+    {
+        self.init(constructor)
+    }
+
+    pub fn pretty_print(&self) where T: Serialize {
+        println!("{}", serde_json::to_string(&self.data).unwrap());
+    }
+}
+
+
 
 fn testfn() {
 
@@ -219,11 +125,20 @@ fn testfn() {
 #[cfg(test)]
 mod tests2 {
     use crate::*;
+    #[macro_use]
+    use crate::macros;
     use frunk_core::hlist::*;
+
+    create_path!(P1);
 
     #[test]
     fn test() {
-        let x = hlist![0, 1] + hlist![2, 3];
-        println!("{:?}", x);
+        let builder = Builder { data: HNil };
+        let builder = builder.new(|builder| {
+            // cls.push::<P1>()
+            Builder {
+                data: HCons { head: (Path::<P1>::new(), 0f32), tail: HNil }
+            }
+        });
     }
 }

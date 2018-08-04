@@ -5,6 +5,8 @@ use frunk::hlist::{HCons, HNil};
 use frunk_core::indices::{Here, There};
 use frunk_core::traits::*;
 
+use serde::{Serialize, Deserialize};
+
 #[derive(Copy)]
 pub struct Path<T> {
     path: PhantomData<T>
@@ -24,24 +26,7 @@ impl<P> Path<P> {
     }
 }
 
-macro_rules! path {
-    ($id:ident) => {
-        #[derive(Debug)]
-        struct $id;
 
-        impl DebugPath for $id {
-            fn fmt_path(f: &mut std::fmt::Formatter) -> std::fmt::Result {
-                write!(f, "{}", stringify!($id))
-            }
-        }
-    };
-    ($($id:ident,)*) => {
-        $(path!($id);)*
-    };
-    ($($id:ident),*) => {
-        $(path!($id);)*
-    }
-}
 
 pub trait DebugPath {
     fn fmt_path(f: &mut Formatter) -> DebugResult;
@@ -70,7 +55,7 @@ impl<P: DebugPath> Debug for Path<P> {
     }
 }
 
-trait ChildOfInner<P> {}
+pub trait ChildOfInner<P> {}
 
 impl<H> ChildOfInner<HNil> for HCons<H, HNil> {}
 impl<P, H, T> ChildOfInner<P> for HCons<H, T> where T: ChildOfInner<P> {}
@@ -89,7 +74,7 @@ impl TestTrait for f32 {}
 mod tests {
     use crate::*;
 
-    path!(P1, P2, P3, P4);
+    create_path!(P1, P2, P3, P4);
 
     #[test]
     fn add_child() {

@@ -10,7 +10,7 @@ pub trait FoldL<Folder, Acc> {
     fn foldl(self, folder: Folder, acc: Acc) -> Self::Output;
 }
 
-impl<F, Acc: HList> FoldL<F, Acc> for HNil {
+impl<F, Acc> FoldL<F, Acc> for HNil {
     type Output = Acc;
 
     fn foldl(self, _: F, acc: Acc) -> Self::Output {
@@ -38,7 +38,7 @@ pub trait FoldR<Folder, Init> {
     fn foldr(self, folder: Folder, i: Init) -> Self::Output;
 }
 
-impl<F, Init> FoldR<F, Init> for HNil where Init: HList {
+impl<F, Init> FoldR<F, Init> for HNil {
     type Output = Init;
 
     fn foldr(self, _: F, i: Init) -> Self::Output {
@@ -50,8 +50,7 @@ impl<F, FolderHeadR, H, Tail, Init> FoldR<F, Init>
     for HCons<H, Tail>
 where
     Tail: FoldR<F, Init>,
-    F: Clone + FnOnce(H, <Tail as FoldR<F, Init>>::Output) -> FolderHeadR,
-    FolderHeadR: HList
+    F: Clone + FnOnce(H, <Tail as FoldR<F, Init>>::Output) -> FolderHeadR
 {
     type Output = FolderHeadR;
 
