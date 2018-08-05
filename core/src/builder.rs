@@ -118,24 +118,39 @@ where
         }
     }
 
-    pub fn with<P, F, O>(self, constructor: F) -> <Self as Add<Builder<H, O>>>::Output
-    where
-        P: Clone,
-        H: Add<P>,
-        <H as Add<P>>::Output: DebugPath,
-        Builder<H, HNil>: Init<F, P>,
-        <Builder<H, HNil> as Init<F, P>>::Output: Entry<Path=P, Data=O>,
-        F: Clone + FnOnce(Builder<<H as Add<P>>::Output, HNil>) -> Builder<H, O>,
-        Self: Add<Builder<H, O>>
+    pub fn add<C, O: Sized>(self, path: C, other: O) -> Builder<H, HCons<(Path<<H as Add<C>>::Output>, O), T>>
+    where H: Add<C>
     {
-        self + Builder {
-            path: Path::new(),
-            data: Builder { path: Path::new(), data: HNil }.init(constructor).get_data().1
+        let head: (Path<<H as Add<C>>::Output>, O) = (Path::new(), other);
+        Builder {
+            path: self.path,
+            data: HCons {
+                head: head,
+                tail: self.data
+            }
         }
     }
 
     pub fn pretty_print(&self) where T: Serialize {
         println!("{}", serde_json::to_string(&self.data).unwrap());
+    }
+}
+
+impl<H, T> Builder<H, T>
+where
+    H: DebugPath,
+{
+    pub fn with<P, F, O>(self, constructor: F) -> Builder<H, <Self as Init<F, P>>::Output>
+    where
+        F: Clone + FnOnce(Builder<H>) -> Builder<H, O>,
+        H: Add<P>,
+        <H as std::ops::Add<P>>::Output: DebugPath,
+        Self: Init<F, P>,
+    {
+        Builder {
+            path: Path::new(),
+            data: self.init(constructor)
+        }
     }
 }
 

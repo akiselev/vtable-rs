@@ -38,6 +38,16 @@ macro_rules! create_path {
                 HCons { head: self, tail: other }
             }
         }
+
+        impl<H, T> std::ops::Add<HCons<H, T>> for $id
+        where T: HList
+        {
+            type Output = <HCons<$id, HNil> as Add<HCons<H, T>>>::Output;
+
+            fn add(self, other: HCons<H, T>) -> <HCons<$id, HNil> as Add<HCons<H, T>>>::Output {
+                HCons { head: self, tail: HNil } + other
+            }
+        }
     };
     ($($id:ident,)*) => {
         $(create_path!($id);)*

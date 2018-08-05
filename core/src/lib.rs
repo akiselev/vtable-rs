@@ -119,7 +119,7 @@ mod tests2 {
             let builder = builder + other;
             builder.with::<P5, _, _>(|builder| {
                 builder.push::<P4, _>(23u64)
-            })
+            }).add(P4, 20f64)
         });
 
         println!("{}", serde_json::to_string_pretty(&builder).unwrap());
