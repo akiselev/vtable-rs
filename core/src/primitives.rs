@@ -1,5 +1,18 @@
 use crate::*;
 
+#[derive(Copy, Clone, Debug)]
+pub struct Type<T> {
+    path: PhantomData<T>
+}
+
+impl<T> Type<T> {
+    pub fn new() -> Type<T> {
+        Type {
+            path: PhantomData
+        }
+    }
+}
+
 pub struct Const<P, T: Sized, F: Fn() -> T> {
     crate path: Path<P>,
     crate ty: Type<T>,

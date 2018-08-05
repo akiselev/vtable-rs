@@ -1,21 +1,12 @@
 // #![feature(async_await, await_macro, associated_type_defaults, unsize, coerce_unsized, pin, fn_traits, arbitrary_self_types, futures_api, proc_macro, proc_macro_span, proc_macro_raw_ident, never_type, specialization, unboxed_closures)]
 #![feature(impl_specialization, rust_2018_preview, nll, unsize, coerce_unsized, fn_traits, pin, arbitrary_self_types, never_type, specialization, unboxed_closures)]
 
-use std::borrow::Borrow;
 use std::boxed::PinBox;
 use std::marker::PhantomData;
-use std::mem::PinMut;
-use std::mem::size_of;
-use std::ops::{Index, Deref, DerefMut};
 use std::ops::Add;
 
 use frunk::*;
-use frunk::prelude::*;
-use frunk_core::*;
-use frunk_core::hlist::*;
-use frunk_core::indices::*;
-use failure::{Error, Fail};
-use serde::{Serialize, Deserialize};
+use serde::{Serialize};
 
 mod traits;
 pub use crate::traits::*;
@@ -34,19 +25,6 @@ pub use crate::builder::*;
 
 mod primitives;
 pub use crate::primitives::*;
-
-#[derive(Copy, Clone, Debug)]
-pub struct Type<T> {
-    path: PhantomData<T>
-}
-
-impl<T> Type<T> {
-    pub fn new() -> Type<T> {
-        Type {
-            path: PhantomData
-        }
-    }
-}
 
 #[cfg(test)]
 mod tests {
@@ -72,25 +50,6 @@ mod tests {
             assert_eq!(3, *(ptr.offset(2)));
         };
     }
-}
-
-trait Replace<P, F> {
-    type Output;
-
-    fn replace(self, func: F) -> Self::Output;
-}
-
-
-trait Binder<T> {
-
-}
-
-struct Binding<P: Sized> {
-    data: P
-}
-
-fn testfn() {
-
 }
 
 #[cfg(test)]
@@ -121,7 +80,6 @@ mod tests2 {
         let i1 = h1.index_of::<P1, _>();
         println!("1: {:?}", i1);
         let h3 = hlist![h1, h2];
-        println!("1: {:?}", i1);
     }
 
     // create_path!(P1, P2, P3, P4, P5);
