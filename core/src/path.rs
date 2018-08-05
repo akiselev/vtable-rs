@@ -1,18 +1,20 @@
 use std::fmt::{Formatter, Debug, Result as DebugResult};
 use std::marker::PhantomData;
+use std::ops::Add;
 
 use frunk::hlist::{HCons, HNil, HList};
 use frunk_core::indices::{Here, There};
 use frunk_core::traits::*;
 
-use serde::ser::{Serialize, Serializer, SerializeStruct};
+use serde::Serialize;
+use serde::ser::{Serialize as SerializeTrait, Serializer, SerializeStruct};
 
 #[derive(Copy)]
 pub struct Path<T> {
     path: PhantomData<HCons<T, HNil>>
 }
 
-impl<P: DebugPath> Serialize for Path<P> {
+impl<P: DebugPath> SerializeTrait for Path<P> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -36,7 +38,49 @@ impl<P> Path<P> {
     }
 }
 
+#[derive(Copy, Clone, Serialize)]
+pub struct Route<P: DebugPath, C: DebugPath, T> {
+    parent: Path<P>,
+    child: Path<C>,
+    data: PhantomData<T>
+}
 
+impl<P: DebugPath, C: DebugPath, T> Route<P, C, T> {
+    pub fn new() -> Route<P, C, T> {
+        Route {
+            parent: Path::new(),
+            child: Path::new(),
+            data: PhantomData
+        }
+    }
+
+    pub fn path<A>(&self) -> Path<A>
+    where P: Add<C, Output=A>
+    {
+        Path::new()
+    }
+}
+
+
+impl<P, C, T, A> From<Route<P, C, T>> for Path<A>
+where P: Add<C, Output=A>, C: DebugPath, P: DebugPath
+{
+    fn from(other: Route<P, C, T>) -> Path<A> {
+        Path::new()
+    }
+}
+
+impl<P, C, T> Debug for Route<P, C, T>
+where C: DebugPath, P: DebugPath
+{
+    fn fmt(&self, f: &mut Formatter) -> DebugResult {
+        write!(f, "(")?;
+        <P as DebugPath>::fmt_path(f)?;
+        write!(f, " -> ")?;
+        <C as DebugPath>::fmt_path(f)?;
+        write!(f, ")")
+    }
+}
 
 pub trait DebugPath {
     fn fmt_path(f: &mut Formatter) -> DebugResult;
@@ -64,8 +108,6 @@ impl<H: DebugPath, T: DebugPath> DebugPath for HCons<H, T> {
         format!("{}{}", H::get_name(), T::get_name())
     }
 }
-
-
 
 impl<P: DebugPath> Debug for Path<P> {
     fn fmt(&self, f: &mut Formatter) -> DebugResult {
@@ -102,11 +144,8 @@ mod tests {
             (Path::<Hlist![P4]>::new(), 4f32),
         ];
 
-        println!("1: {:?}", list);
         let list = AsChild::<Hlist![P1]>::as_child(list);
         let list = AsChild::<Hlist![P2]>::as_child(list);
         let list = AsChild::<Hlist![P3]>::as_child(list);
-        println!("2: {:?}", list);
-        // let list2 = FilterBy::<TestTrait>::filter_by(list);
     }
 }
