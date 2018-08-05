@@ -1,20 +1,30 @@
 use std::fmt::{Formatter, Debug, Result as DebugResult};
 use std::marker::PhantomData;
 
-use frunk::hlist::{HCons, HNil};
+use frunk::hlist::{HCons, HNil, HList};
 use frunk_core::indices::{Here, There};
 use frunk_core::traits::*;
 
-use serde::{Serialize, Deserialize};
+use serde::ser::{Serialize, Serializer, SerializeStruct};
 
 #[derive(Copy)]
 pub struct Path<T> {
-    path: PhantomData<T>
+    path: PhantomData<HCons<T, HNil>>
 }
 
-impl <T> Clone for Path<T> {
+impl<P: DebugPath> Serialize for Path<P> {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+
+        serializer.serialize_str(&format!("/{}", P::get_name()))
+    }
+}
+
+impl<T> Clone for Path<T> {
     fn clone(&self) -> Path<T> {
-        Path::new()
+        Path { path: PhantomData }
     }
 }
 
@@ -30,11 +40,16 @@ impl<P> Path<P> {
 
 pub trait DebugPath {
     fn fmt_path(f: &mut Formatter) -> DebugResult;
+    fn get_name() -> String;
 }
 
 impl DebugPath for HNil {
     fn fmt_path(f: &mut Formatter) -> DebugResult {
-        write!(f, "")
+        write!(f, "-")
+    }
+
+    fn get_name() -> String {
+        ":".to_owned()
     }
 }
 
@@ -43,6 +58,10 @@ impl<H: DebugPath, T: DebugPath> DebugPath for HCons<H, T> {
         <H as DebugPath>::fmt_path(f)?;
         write!(f, "/")?;
         <T as DebugPath>::fmt_path(f)
+    }
+
+    fn get_name() -> String {
+        format!("{}{}", H::get_name(), T::get_name())
     }
 }
 

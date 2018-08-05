@@ -61,7 +61,7 @@ where
 }
 
 pub trait Map<Mapper: Clone> {
-    type Output: HList;
+    type Output;
 
     fn map(self, mapper: Mapper) -> Self::Output;
 }
@@ -78,8 +78,7 @@ impl<F, R, H, T, T1, T2> Map<F> for HCons<H, T>
 where
     F: Clone + Fn(H) -> R,
     T: Map<F, Output=T1>,
-    T1: Add<R, Output=T2> + HList,
-    T2: HList
+    T1: Add<R, Output=T2>,
 {
     type Output = T2;
 
@@ -106,7 +105,7 @@ where T: Add<O, Output=T1>, T1: IntoReverse<Output=T2>
 }
 
 pub trait AsChild<P> {
-    type Output: HList;
+    type Output;
 
     fn as_child(self) -> Self::Output;
 }
@@ -123,8 +122,7 @@ impl<P, P2, C, H, T, T1, T2> AsChild<C> for HCons<(Path<P>, H), T>
 where
     T: AsChild<C, Output=T1>,
     C: Add<P, Output=P2>,
-    T1: Append<Hlist![(Path<P2>, H)], Output=T2> + HList,
-    T2: HList
+    T1: Append<Hlist![(Path<P2>, H)], Output=T2>,
 {
     type Output = T2;
 
@@ -132,4 +130,3 @@ where
         self.tail.as_child().append(hlist![(Path::new(), self.head.1)])
     }
 }
-

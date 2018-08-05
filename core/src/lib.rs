@@ -1,5 +1,5 @@
 // #![feature(async_await, await_macro, associated_type_defaults, unsize, coerce_unsized, pin, fn_traits, arbitrary_self_types, futures_api, proc_macro, proc_macro_span, proc_macro_raw_ident, never_type, specialization, unboxed_closures)]
-#![feature(rust_2018_preview, nll, unsize, coerce_unsized, fn_traits, pin, arbitrary_self_types, never_type, specialization, unboxed_closures)]
+#![feature(impl_specialization, rust_2018_preview, nll, unsize, coerce_unsized, fn_traits, pin, arbitrary_self_types, never_type, specialization, unboxed_closures)]
 
 use std::borrow::Borrow;
 use std::boxed::PinBox;
@@ -54,10 +54,10 @@ impl<T> Type<T> {
 mod tests {
     use crate::*;
 
-    struct P1();
-    struct P2();
-    struct P3();
-    struct P4();
+    #[macro_use]
+    use crate::macros;
+
+    create_path!(P1, P2, P3, P4);
 
     #[test]
     fn testfn() {
@@ -91,33 +91,6 @@ struct Binding<P: Sized> {
     data: P
 }
 
-impl<T> Builder<T> {
-    pub fn push<P, P1, O: Sized>(self, other: O) -> Builder<HCons<(Path<P1>, O), T>>
-    where HNil: Add<P, Output=P1>
-    {
-        let head: (Path<P1>, O) = (Path::new(), other);
-        Builder {
-            data: HCons {
-                head: head,
-                tail: self.data
-            }
-        }
-    }
-    
-    pub fn new<F, O>(self, constructor: F) -> O
-    where 
-        Self: Init<F, HNil, Output=O>
-    {
-        self.init(constructor)
-    }
-
-    pub fn pretty_print(&self) where T: Serialize {
-        println!("{}", serde_json::to_string(&self.data).unwrap());
-    }
-}
-
-
-
 fn testfn() {
 
 }
@@ -129,16 +102,27 @@ mod tests2 {
     use crate::macros;
     use frunk_core::hlist::*;
 
-    create_path!(P1);
+    create_path!(P1, P2, P3, P4, P5);
 
     #[test]
     fn test() {
-        let builder = Builder { data: HNil };
-        let builder = builder.new(|builder| {
-            // cls.push::<P1>()
-            Builder {
-                data: HCons { head: (Path::<P1>::new(), 0f32), tail: HNil }
-            }
+        println!("PATH 1: {:?}", hlist![P1] + (hlist![P2] + hlist![P3]));
+        println!("     1: {:?}", hlist![P1] + (hlist![P2] + hlist![P3]));
+        let builder = Builder::new(|builder| {
+            let builder = builder.push::<P1, _>(0f32)
+                .push::<P2, _>(1f32);
+            println!("/.....{:?}", builder.data);
+            let other = Builder::new(|builder| {
+                builder.push::<P3, _>(7)
+            });
+            println!("/2.....{:?}", other.data);
+            let builder = builder + other;
+            builder.with::<P5, _, _>(|builder| {
+                builder.push::<P4, _>(23u64)
+            })
         });
+
+        println!("{}", serde_json::to_string_pretty(&builder).unwrap());
+        println!("{:?}", builder.data);
     }
 }

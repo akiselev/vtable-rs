@@ -42,8 +42,101 @@ impl<H: InitSize, T: InitSize> InitSize for HCons<H, T> {
     const SIZE: usize = H::SIZE + T::SIZE;
 }
 
-pub struct Builder<O> {
+impl<H: DebugPath, O> Entry for Builder<H, O> {
+    type Path = Path<H>;
+    type Data = O;
+
+    fn get_path(&self) -> Self::Path {
+        self.path.clone()
+    }
+
+    fn get_data(self) -> (Self::Path, Self::Data) {
+        (self.path, self.data)
+    }
+
+    fn borrow_data(&self) -> &Self::Data {
+        &self.data
+    }
+}
+
+#[derive(Serialize)]
+pub struct Builder<H = HNil, O=HNil>
+where
+    H: DebugPath,
+{
+    crate path: Path<H>,
     crate data: O
+}
+
+impl Builder<HNil, HNil> {
+    pub fn new<F: Clone, O>(constructor: F) -> Builder<HNil, <Builder<HNil, HNil> as Init<F, HNil>>::Output>
+    where 
+        F: Clone + FnOnce(Builder<HNil, HNil>) -> Builder<HNil, O>,
+        Builder<HNil>: Init<F, HNil>,
+    {
+        Builder {
+            path: Path::new(),
+            data: Builder { path: Path::new(), data: HNil }.init(constructor)
+        }
+    }
+}
+
+impl<H, F, P, O1, O2> Init<F, P> for Builder<H, O1>
+where
+    H: DebugPath,
+    F: Clone + FnOnce(Builder<H, HNil>) -> Builder<H, O2>,
+    O2: AsChild<P>,
+    O1: Add<<O2 as AsChild<P>>::Output>,
+    // <O1 as Add<<O2 as AsChild<P>>::Output>>::Output: HList
+{
+    type Output = <O1 as Add<<O2 as AsChild<P>>::Output>>::Output;
+
+    fn init(self, func: F) -> Self::Output {
+        let Builder { path, data } = self;
+        let data = data;
+        let new_data = func(Builder { path, data: HNil }).data;
+        let child = new_data.as_child();
+        data + child
+    }
+}
+
+impl<H, T> Builder<H, T>
+where
+    H: DebugPath,
+{
+    pub fn push<C, O: Sized>(self, other: O) -> Builder<H, HCons<(Path<<H as Add<C>>::Output>, O), T>>
+    where H: Add<C>
+    {
+        let path = Path::new();
+        let head: (Path<<H as Add<C>>::Output>, O) = (path, other);
+        Builder {
+            path: self.path,
+            data: HCons {
+                head: head,
+                tail: self.data
+            }
+        }
+    }
+
+    pub fn with<P, F, O>(self, constructor: F) -> <Self as Add<Builder<H, O>>>::Output
+    where
+        P: Clone,
+        H: Add<P>,
+        <H as Add<P>>::Output: DebugPath,
+        Builder<H, HNil>: Init<F, P>,
+        <Builder<H, HNil> as Init<F, P>>::Output: Entry<Path=P, Data=O>,
+        F: Clone + FnOnce(Builder<<H as Add<P>>::Output, HNil>) -> Builder<H, O>,
+        Self: Add<Builder<H, O>>
+    {
+        self + Builder {
+            path: Path::new(),
+            data: Builder { path: Path::new(), data: HNil }.init(constructor).get_data().1
+        }
+    }
+
+    pub fn pretty_print(&self) where T: Serialize {
+        println!("{}", serde_json::to_string(&self.data).unwrap());
+    }
 }
 
 pub trait Init<F, P=HNil> {
@@ -64,48 +157,23 @@ impl<H, T> Parent for (Path<H>, T) where Path<H>: Parent {
     type Path = <Path<H> as Parent>::Path;
 }
 
-impl<O, O1, O2, O3, O4, F, P> Init<F, P> for Builder<O>
+impl<O, H, H2, RHS> Add<Builder<H2, RHS>> for Builder<H, O>
 where
-    O: HList + Add<HCons<F, HNil>, Output=O1>,
-    F: Clone + FnOnce(Builder<HNil>) -> Builder<O2>,
-    O2: AsChild<P, Output=O3>,
-    O1: Add<O3, Output=O4>,
-    O3: HList, O4: HList
+    H: DebugPath,
+    H2: DebugPath,
+    O: Add<RHS>,
+    //RHS: HList, 
+    // <O as Add<RHS>>::Output: HList
 {
-    type Output = O4;
+    type Output = Builder<H, <O as Add<RHS>>::Output>;
 
-    fn init(self, func: F) -> Self::Output {
-        let Builder { data } = self;
-        let data = data + hlist!(func.clone());
-        let new_data = func(Builder { data: HNil }).data;
-        let child = new_data.as_child();
-        data + child
+    fn add(self, rhs: Builder<H2, RHS>) -> Self::Output {
+        Builder {
+            path: self.path,
+            data: self.data + rhs.data
+        }
     }
 }
-
-// impl<'this, O, O1, O2, O3, O4, O5, P, F> Init<P, F> for Builder<O>
-// where
-//     F: Clone + FnOnce(Builder<O>) -> Builder<O2>,
-//     HCons<F, HNil>: Add<O2, Output=O3>,
-//     O3: AsChild<P, Output=O4>,
-//     O: Add<O4, Output=O5>,
-//     O2: HList, O4: HList, O5: HList
-// {
-//     type Output = Builder<O5>;
-
-//     fn init(self, func: F) -> Self::Output {
-//         let Builder { data } = self;
-        
-//         let child = {
-//             let input = data.to_ref();
-//             let output = (func.clone())(Builder { data: input });
-//             hlist![func] + output
-//         };
-//         Builder {
-//             data: data + child.as_child()
-//         }
-//     }
-// }
 
 pub fn instantiate<'a, T>(list: &'a T) -> PinBox<T>
 where
