@@ -80,6 +80,7 @@ mod tests2 {
         let i1 = h1.index_of::<P1, _>();
         println!("1: {:?}", i1);
         let h3 = hlist![h1, h2];
+        println!("h3: {:?}", h3);
     }
 
     // create_path!(P1, P2, P3, P4, P5);
