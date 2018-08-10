@@ -26,6 +26,10 @@ pub use crate::builder::*;
 mod primitives;
 pub use crate::primitives::*;
 
+mod symbol;
+pub use crate::primitives::*;
+
+
 #[cfg(test)]
 mod tests {
     use crate::*;
@@ -54,55 +58,27 @@ mod tests {
 
 #[cfg(test)]
 mod tests2 {
-    // use crate::*;
-    // #[macro_use]
-    // use crate::macros;
-    // use frunk_core::hlist::*;
-    use funky::hlist::*;
-    use funky::hlist;
+    use crate::*;
+    #[macro_use]
+    use crate::macros;
+    use frunk_core::hlist::*;
 
-
-    #[derive(Debug)]
-    struct P1;
-    #[derive(Debug)]
-    struct P2;
-    #[derive(Debug)]
-    struct P3;
-    #[derive(Debug)]
-    struct P4;
-    #[derive(Debug)]
-    struct P5;
+    create_path!(P1, P2, P3, P4, P5);
 
     #[test]
-    fn testfunky() {
-        let h1 = hlist![P1, P2, P3];
-        let h2 = hlist![P4, P5];
-        let i1 = h1.index_of::<P1, _>();
-        println!("1: {:?}", i1);
-        let h3 = hlist![h1, h2];
+    fn test() {
+        let builder = Builder::new(|builder| {
+            let builder = builder.push::<P1, _>(0f32)
+                .push::<P2, _>(1f32);
+            let other = Builder::new(|builder| {
+                builder.push::<P3, _>(7)
+            });
+            let builder = builder + other;
+            builder.with::<P5, _, _>(|builder| {
+                builder.push::<P4, _>(23u64)
+            }).add(P4, 20f64)
+        });
+
+        println!("{}", serde_json::to_string_pretty(&builder).unwrap());
     }
-
-    // create_path!(P1, P2, P3, P4, P5);
-
-    // #[test]
-    // fn test() {
-    //     // println!("PATH 1: {:?}", hlist![P1] + (hlist![P2] + hlist![P3]));
-    //     // println!("     1: {:?}", hlist![P1] + (hlist![P2] + hlist![P3]));
-    //     let builder = Builder::new(|builder| {
-    //         let builder = builder.push::<P1, _>(0f32)
-    //             .push::<P2, _>(1f32);
-    //         // println!("/.....{:?}", builder.data);
-    //         let other = Builder::new(|builder| {
-    //             builder.push::<P3, _>(7)
-    //         });
-    //         // println!("/2.....{:?}", other.data);
-    //         let builder = builder + other;
-    //         builder.with::<P5, _, _>(|builder| {
-    //             builder.push::<P4, _>(23u64)
-    //         }).add(P4, 20f64)
-    //     });
-
-    //     // println!("{}", serde_json::to_string_pretty(&builder).unwrap());
-    //     // println!("{:?}", builder.data);
-    // }
 }

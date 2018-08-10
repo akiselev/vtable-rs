@@ -2,7 +2,7 @@
 #[macro_export]
 macro_rules! create_path {
     ($id:ident) => {
-        #[derive(Copy, Clone, Debug, Serialize, Deserialize)]
+        #[derive(Copy, Clone, Debug, Serialize)]
         struct $id;
 
         impl crate::path::DebugPath for $id {
@@ -40,7 +40,7 @@ macro_rules! create_path {
         }
 
         impl<H, T> std::ops::Add<HCons<H, T>> for $id
-        where T: HList
+        where T: frunk_core::hlist::HList
         {
             type Output = <HCons<$id, HNil> as Add<HCons<H, T>>>::Output;
 
