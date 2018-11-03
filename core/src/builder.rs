@@ -1,4 +1,3 @@
-use std::borrow::Borrow;
 use std::mem::size_of;
 use std::ops::{Index, Deref, DerefMut};
 use std::ops::Add;
@@ -40,7 +39,7 @@ impl<H: InitSize, T: InitSize> InitSize for HCons<H, T> {
     const SIZE: usize = H::SIZE + T::SIZE;
 }
 
-impl<F, H: DebugPath, O> Entry for Builder<F, H, O> {
+impl<H: DebugPath, O> Entry for Builder<H, O> {
     type Path = Path<H>;
     type Data = O;
 
@@ -57,47 +56,32 @@ impl<F, H: DebugPath, O> Entry for Builder<F, H, O> {
     }
 }
 
-pub struct Class<T, FINAL> {
-    class: T,
-    data: FINAL
-}
-
-pub trait Constructor: Clone {
-    type Output;
-
-    fn constructor(&self) -> Self::Output;
-}
-
 #[derive(Serialize)]
-pub struct Builder<FINAL, H = HNil, O=HNil>
+pub struct Builder<H = HNil, O=HNil>
 where
     H: DebugPath,
 {
     crate path: Path<H>,
-    crate data: O,
-    crate final_type: PhantomData<FINAL>
+    crate data: O
 }
 
-impl<FINAL> Builder<FINAL, HNil, HNil> {
-    pub fn new<F: Clone, O>(constructor: F) -> FINAL
+impl Builder<HNil, HNil> {
+    pub fn new<F: Clone, O>(constructor: F) -> Builder<HNil, <Builder<HNil, HNil> as Init<F, HNil>>::Output>
     where 
-        F: Clone + FnOnce(Builder<FINAL, HNil, HNil>) -> Builder<FINAL, HNil, O>,
-        Builder<FINAL, HNil, HNil>: Init<FINAL, F, HNil>,
-        FINAL: Clone,
-        Builder<FINAL, HNil, <Builder<FINAL, HNil, HNil> as Init<FINAL, F, HNil>>::Output>: Constructor<Output=FINAL>
+        F: Clone + FnOnce(Builder<HNil, HNil>) -> Builder<HNil, O>,
+        Builder<HNil>: Init<F, HNil>,
     {
         Builder {
             path: Path::new(),
-            data: Builder { path: Path::new(), data: HNil, final_type: PhantomData }.init(constructor),
-            final_type: PhantomData
-        }.constructor()
+            data: Builder { path: Path::new(), data: HNil }.init(constructor)
+        }
     }
 }
 
-impl<FINAL, H, F, P, O1, O2> Init<FINAL, F, P> for Builder<FINAL, H, O1>
+impl<H, F, P, O1, O2> Init<F, P> for Builder<H, O1>
 where
     H: DebugPath,
-    F: Clone + FnOnce(Builder<FINAL, H, HNil>) -> Builder<FINAL, H, O2>,
+    F: Clone + FnOnce(Builder<H, HNil>) -> Builder<H, O2>,
     O2: AsChild<P>,
     O1: Add<<O2 as AsChild<P>>::Output>,
     // <O1 as Add<<O2 as AsChild<P>>::Output>>::Output: HList
@@ -105,19 +89,19 @@ where
     type Output = <O1 as Add<<O2 as AsChild<P>>::Output>>::Output;
 
     fn init(self, func: F) -> Self::Output {
-        let Builder { path, data, final_type } = self;
+        let Builder { path, data } = self;
         let data = data;
-        let new_data = func(Builder { path, data: HNil, final_type }).data;
+        let new_data = func(Builder { path, data: HNil }).data;
         let child = new_data.as_child();
         data + child
     }
 }
 
-impl<FINAL, H, T> Builder<FINAL, H, T>
+impl<H, T> Builder<H, T>
 where
     H: DebugPath,
 {
-    pub fn push<C, O: Sized>(self, other: O) -> Builder<FINAL, H, HCons<(Path<<H as Add<C>>::Output>, O), T>>
+    pub fn push<C, O: Sized>(self, other: O) -> Builder<H, HCons<(Path<<H as Add<C>>::Output>, O), T>>
     where H: Add<C>
     {
         let path = Path::new();
@@ -127,12 +111,11 @@ where
             data: HCons {
                 head: head,
                 tail: self.data
-            },
-            final_type: self.final_type
+            }
         }
     }
 
-    pub fn add<C, O: Sized>(self, path: C, other: O) -> Builder<FINAL, H, HCons<(Path<<H as Add<C>>::Output>, O), T>>
+    pub fn add<C, O: Sized>(self, path: C, other: O) -> Builder<H, HCons<(Path<<H as Add<C>>::Output>, O), T>>
     where H: Add<C>
     {
         let head: (Path<<H as Add<C>>::Output>, O) = (Path::new(), other);
@@ -141,8 +124,7 @@ where
             data: HCons {
                 head: head,
                 tail: self.data
-            },
-            final_type: self.final_type
+            }
         }
     }
 
@@ -151,26 +133,25 @@ where
     }
 }
 
-impl<FINAL, H, T> Builder<FINAL, H, T>
+impl<H, T> Builder<H, T>
 where
     H: DebugPath,
 {
-    pub fn with<P, F, O>(self, constructor: F) -> Builder<FINAL, H, <Self as Init<FINAL, F, P>>::Output>
+    pub fn with<P, F, O>(self, constructor: F) -> Builder<H, <Self as Init<F, P>>::Output>
     where
-        F: Clone + FnOnce(Builder<FINAL, H>) -> Builder<FINAL, H, O>,
+        F: Clone + FnOnce(Builder<H>) -> Builder<H, O>,
         H: Add<P>,
         <H as std::ops::Add<P>>::Output: DebugPath,
-        Self: Init<FINAL, F, P>,
+        Self: Init<F, P>,
     {
         Builder {
             path: Path::new(),
-            data: self.init(constructor),
-            final_type: PhantomData
+            data: self.init(constructor)
         }
     }
 }
 
-pub trait Init<FINAL, F, P=HNil> {
+pub trait Init<F, P=HNil> {
     type Output;
 
     fn init(self, func: F) -> Self::Output;
@@ -188,7 +169,7 @@ impl<H, T> Parent for (Path<H>, T) where Path<H>: Parent {
     type Path = <Path<H> as Parent>::Path;
 }
 
-impl<FINAL, O, H, H2, RHS> Add<Builder<FINAL, H2, RHS>> for Builder<FINAL, H, O>
+impl<O, H, H2, RHS> Add<Builder<H2, RHS>> for Builder<H, O>
 where
     H: DebugPath,
     H2: DebugPath,
@@ -196,13 +177,12 @@ where
     //RHS: HList, 
     // <O as Add<RHS>>::Output: HList
 {
-    type Output = Builder<FINAL, H, <O as Add<RHS>>::Output>;
+    type Output = Builder<H, <O as Add<RHS>>::Output>;
 
-    fn add(self, rhs: Builder<FINAL, H2, RHS>) -> Self::Output {
+    fn add(self, rhs: Builder<H2, RHS>) -> Self::Output {
         Builder {
             path: self.path,
-            data: self.data + rhs.data,
-            final_type: self.final_type            
+            data: self.data + rhs.data
         }
     }
 }
