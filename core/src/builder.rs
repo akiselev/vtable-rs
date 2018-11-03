@@ -1,6 +1,4 @@
 use std::borrow::Borrow;
-use std::boxed::PinBox;
-use std::mem::PinMut;
 use std::mem::size_of;
 use std::ops::{Index, Deref, DerefMut};
 use std::ops::Add;
@@ -206,26 +204,5 @@ where
             data: self.data + rhs.data,
             final_type: self.final_type            
         }
-    }
-}
-
-pub fn instantiate<'a, T>(list: &'a T) -> PinBox<T>
-where
-    T: ToRef<'a>,
-    <T as ToRef<'a>>::Output: FoldL<GetSizeFold, usize, Output=usize> + FoldR<InitFold, *mut (), Output=*mut ()>,
-{
-    let fold = GetSizeFold;
-    
-    let capacity = list.to_ref().foldl(fold, 0);
-    let vec = Vec::<u8>::with_capacity(capacity);
-    unsafe {
-        let vec_ptr = vec.as_ptr();
-        let ptr = vec_ptr.offset(capacity as isize);
-        // println!("test {:?}", ptr as usize);
-        let ptr: *mut () = std::mem::transmute(ptr);
-        let fold = InitFold {};
-        let ptr = list.to_ref().foldr(fold, ptr);
-        let ptr: *mut u8 = std::mem::transmute(ptr);
-        PinBox::<T>::from_raw(std::mem::transmute(vec_ptr))
     }
 }

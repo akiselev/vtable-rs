@@ -1,7 +1,6 @@
 // #![feature(async_await, await_macro, associated_type_defaults, unsize, coerce_unsized, pin, fn_traits, arbitrary_self_types, futures_api, proc_macro, proc_macro_span, proc_macro_raw_ident, never_type, specialization, unboxed_closures)]
-#![feature(impl_specialization, rust_2018_preview, nll, unsize, coerce_unsized, fn_traits, pin, arbitrary_self_types, never_type, specialization, unboxed_closures)]
+#![feature(crate_visibility_modifier, nll, unsize, coerce_unsized, fn_traits, pin, arbitrary_self_types, never_type, specialization, unboxed_closures)]
 
-use std::boxed::PinBox;
 use std::marker::PhantomData;
 use std::ops::Add;
 
@@ -28,33 +27,6 @@ pub use crate::primitives::*;
 
 mod symbol;
 pub use crate::primitives::*;
-
-
-#[cfg(test)]
-mod tests {
-    use crate::*;
-
-    #[macro_use]
-    use crate::macros;
-
-    create_path!(P1, P2, P3, P4);
-
-    #[test]
-    fn testfn() {
-        let list = hlist![
-            Const::new(P1, || 1),
-            Const::new(P2, || 2),
-            Const::new(P3, || 3),
-        ];
-        unsafe {
-            let pinbox = instantiate(&list);
-            let ptr: *const u32 = std::mem::transmute(PinBox::into_raw(pinbox));
-            assert_eq!(1, *ptr);
-            assert_eq!(2, *(ptr.offset(1)));
-            assert_eq!(3, *(ptr.offset(2)));
-        };
-    }
-}
 
 #[cfg(test)]
 mod tests2 {
